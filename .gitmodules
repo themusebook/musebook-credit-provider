@@ -1,0 +1,3 @@
+[submodule "vendor/payment-channels"]
+	path = vendor/payment-channels
+	url = https://github.com/solana-foundation/payment-channels

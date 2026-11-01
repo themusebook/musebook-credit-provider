@@ -1,0 +1,2 @@
+22b94ad3f015659432a0deb08cc7f78b01f1d9fb58c009f0195658e34075e950  target/deploy/musebook_credit_provider.so
+5ca876b7cf5f0a3d690fbed6c60ec254a216e1e9c8ec6896d6c388cffbf2b22b  target/deploy-v2/payment_channels.so
