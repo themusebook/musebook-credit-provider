@@ -3,7 +3,7 @@
 ## Accounts
 | Account | Seeds | Size | Fields |
 |---|---|---|---|
-| `Config` | `[b"musebook-config"]` | 67 B | `version u8`, `bump u8`, `paused bool`, `admin [u8;32]`, `pending_admin [u8;32]` |
+| `Config` | `[b"musebook-config"]` | 99 B (v2); legacy v1 is 67 B | `version u8`, `bump u8`, `paused bool`, `admin [u8;32]`, `pending_admin [u8;32]`, `issuer [u8;32]` (v2) |
 | `Ledger` | `[b"musebook-credit", owner, mint]` | 332 B | as upstream, plus `suspended bool` after `active` |
 
 ## Instructions (tag byte)
@@ -14,6 +14,7 @@
 | 6 | `propose_admin([u8;32])` | admin | admin, config | Sets `pending_admin`; all-zero cancels. |
 | 7 | `accept_admin` | pending admin | pending admin, config | Completes two-step transfer. |
 | 8 | `set_ledger_suspended(u8)` | admin | admin, config, ledger | Per-ledger stop (see below). |
+| 9 | `set_issuer([u8;32])` | admin | admin, config (w), payer (s,w), system | Sets the issuer that co-signs ledger `initialize`. All-zero restores the legacy upgrade-authority rule. Migrates a v1 config to v2 in place, with the payer funding the extra rent. It affects only new ledgers, since each ledger stores its issuer at init. |
 
 Custom errors: `0x4d420001` PAUSED, `…02` UNAUTHORIZED, `…03` BAD_CONFIG, `…04` NO_PENDING_ADMIN, `…05` SUSPENDED, `…06` INVALID_ADMIN.
 
@@ -37,5 +38,6 @@ The program has no Squads-specific code. Any signer works, and that is intention
 
 **Devnet (done 2026-11-02):** program `97F68uhs…` is now governed by Squads v4 multisig `9nebqfSd37E3YyodB6iEMz18JjWP3QoydporvedkjDw2`, a 2-of-3. Its vault `2jBifstNwqWdrswEy8chotmVJcwfMRZkV7miqjR86qdx` holds both admin and upgrade authority. Steps 3 to 6 above were run by `scripts/squads-devnet/run.js`. Signatures are in docs/DEVNET.md. Pause and unpause were executed as vault transactions, and a direct pause by the old deployer key failed with UNAUTHORIZED. Two of the three devnet member keys live on one box, so this proves the mechanics, not key separation. Mainnet members must be hardware wallets you choose.
 
-## Caveat: issuer == upgrade authority at ledger init
-`initialize` (ledger) still requires the issuer to equal the *current upgrade authority* (upstream design). Once the upgrade authority moves to a multisig, every new ledger needs a multisig signature. Before mainnet, decide between two options: keep that (slow but strict), or add a `Config.issuer` that the admin sets, and check against it instead. Tracked in AUDIT_READINESS.md.
+## Issuer vs upgrade authority
+Ledger `initialize` (config PDA as its 8th account) checks the issuer against `Config.issuer` when it is set. If it isn't set, it falls back to the legacy rule (issuer == current upgrade authority, read from ProgramData). Rotate the issuer with `set_issuer`, run through Squads. Ledgers that already exist keep the issuer they were created with: `authorize` and `cancel_unfunded` check `Ledger.issuer`. Issuer rotation therefore doesn't revoke old ledgers. Use `set_ledger_suspended` on them if the old issuer key is compromised.
+On devnet (2026-11-02), the issuer is the throwaway `8CBpS8SE5SpasbvS6LL8Y3JqWYDdAmVL9MhwPHCGuX1v`, set through Squads vault tx #5.

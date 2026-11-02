@@ -106,6 +106,35 @@ Final state, verified: `solana program show` authority = vault. Config: admin = 
 
 Consequences and caveats:
 - The deployer key is now an ordinary member. It can no longer upgrade the program or pause it on its own.
-- **Ledger `initialize` requires the issuer to equal the upgrade authority**, which is now the vault. So new ledgers need a Squads vault transaction as the issuer co-signer. `e2e/run-devnet.sh` in its current form (deployer as issuer) **no longer works** against this deployment. A rerun needs a fresh devnet program, or the planned `Config.issuer` split.
+- ~~Ledger `initialize` required issuer == upgrade authority.~~ Fixed by the v2 upgrade below (`set_issuer`).
 - On devnet, two of the three member keys sit on the same box (deployer and throwaway). That proves the mechanics only, not key separation. **Mainnet needs members you choose, ideally hardware wallets on separate devices**, plus a reviewed threshold and time lock. A config authority of none means membership changes need a multisig config transaction.
 - The program has no Squads-specific code. The vault simply signs through `vault_transaction_execute`.
+
+## v2 upgrade: separate issuer (2026-11-02, ET)
+The v2 program adds `set_issuer` (tag 9, admin only) and config v2 (99 B, `issuer` field). Ledger `initialize` now takes the config PDA as its 8th account. If `Config.issuer` is set, the issuer must equal it. Otherwise the legacy upgrade-authority rule applies. `set_issuer` migrates a v1 (67 B) config in place: realloc to 99 B, with the payer topping up rent. All other instructions read both layouts.
+
+| Item | Value |
+|---|---|
+| Build | `scripts/build-verifiable.sh devnet`, 87,240 B, sha256 `4af58a20ee217e920cd050f311f8f99b86ffedd075a07f482f7aad8f41f7c62e`. Under 96,000 B, so no extend was needed. |
+| Buffer | `FkASuGFBsUCUCnGQGqyJeYjpdG9JUo91RhHx1pAWaMNP`. Written by the deployer, and the dump sha256 matched the build. `set-buffer-authority` → vault: `zLyFksZ9WHUt4eEPVDuR47edgCCctaTqZ41JviA1omJn3bhQRepJYJERHv2y5bEuUUoKCdoGUu6e8b89ZsKYE9k`. The buffer was closed by the upgrade, with rent spilled to the deployer. |
+| Upgrade slot | **517920049** |
+| On-chain hash | dump, first 87,240 B: **`4af58a20…7c62e`, match**. The rest is zero padding. |
+| Issuer | `8CBpS8SE5SpasbvS6LL8Y3JqWYDdAmVL9MhwPHCGuX1v` (new throwaway, box-held, never printed) |
+| Config after | 99 B, version 2, admin = vault, issuer = `8CBpS8SE…`, paused = false |
+
+| Step (Squads 2-of-3: deployer + throwaway approve) | Signature |
+|---|---|
+| program upgrade (buffer FkASuG…): vault tx #4 create | `2ehXQQ6vLSCQuyfczYs6NMNQo3nmkLK5ob2YxFikNPbn1gDQVRzDEwSWG6KoWBVszZ3nYNavn4hRueUnWY46BhVJ` |
+| program upgrade (buffer FkASuG…): proposal create | `5udGLV88oyBMhwSynxF31RLBZp3CtW83TaLLQgHtVaE8iiJZ7GHQQ787gKP1hNrEEF93wBSWjpEdrbzCsfnyXYXM` |
+| program upgrade (buffer FkASuG…): approve (deployer) | `yhztA4U98xuox8HCevdUM5tqfShtxAu3WW3SrnUp5oYjskBWYUTEDUnymgTpHnch8oHUsyxwBP3gfqvabMKycSP` |
+| program upgrade (buffer FkASuG…): approve (member3) | `5FCa4UpRkFn7LFYJnWxQtZETEXmtefEE21Nx1syXcA4X8td4EjVefbMpCYNf9m14U5GgHJSrzCjRvXaEi2ahgDZc` |
+| program upgrade (buffer FkASuG…): execute | `beTCRxyCJigiye7u9ocomv7Hc9FxD1Vf72u32dHDPNp3arEnpWUAghkzQNGs9GTVSayPMtzs3VXe9CmuCtQC8FR` |
+| fund vault 0.002 SOL (pays config v1->v2 migration rent) | `43SJ8jPC3jEarK7p4P8tiWW8xRHj8NT3kmK9BrrLbmEw8dHb2Wt1pv2qdkW7efsyKhusAJWdn8AuvSiPGHf9rSKA` |
+| set_issuer (migrates config v1->v2): vault tx #5 create | `fDH7xcyaAko4v2Wr82K297LjM5cca1LWZ7sMhkcE7qZ3QZZcUGmLDTTQq1qpmLr9CRNg1hHTuWquoBdP2A3TanX` |
+| set_issuer (migrates config v1->v2): proposal create | `5tGpkGNEkNapJYkk9KExEvFehTY8oEJgiEdWVKuZUuESomLEKR7tD3QdTGCDBvKD52ZcNJok42GMFvhByMqiPEV` |
+| set_issuer (migrates config v1->v2): approve (deployer) | `58G4ukNgpK3kCYZ733Reyq89MvioZG7ZBxy97GhT6YEKdL1Td1MknXQnopBDpaYJnjyEdWH4BHyRXJDoWzeG9QfZ` |
+| set_issuer (migrates config v1->v2): approve (member3) | `2xbDw7HowNJE3BqFPbeABjTVSvABrSo3FmZrx5zkjXgocmhsJBpYJTyPEyAEgkECEisw9jkyWT2noeeHRYbFDzZ9` |
+| set_issuer (migrates config v1->v2): execute | `4vABrtwuY1jrq9G8CiqshWS9whJpSJMxyv6usssBH8r3xo2aQz2sBgD9kzgEFqQY6Gtfvw1MGmGUzjV9Vnzf2cpD` |
+| direct set_issuer by old deployer key REJECTED on-chain {"InstructionError":[0,{"Custom":1296171010}]} | `2va9rwtJwML4xqfv8p5THpHSqSkBMbimDCsPXwCzStPNBE3dW29N7gMPYZ7qWU1PT1o1UdXJ5WaGL6RXtqEMMD2c` |
+
+Devnet e2e rerun with the configured issuer (deployer only funds; issuer `8CBpS8SE…` co-signs initialize and authorize): **43 PASS, exit 0**. Evidence: `evidence/devnet-run-2026-11-02-v2-issuer.txt`. It covers the impostor-issuer and missing-signature rejects plus the full hook flow (deposit, authorize, open/pre_fund, topUp, seal, distribute/post_distribute refund, withdraw, zero-refund terminal, expiry, cancel, replay rejects). Governance flows are not repeated in this mode, because the admin is the vault; they are covered by the Squads proposals above. The harness now prepends `SetComputeUnitLimit(400000)` to channel transactions. One Surfpool run hit the 200k default limit during a hooked `open`, because PDA bump searches vary by key set.

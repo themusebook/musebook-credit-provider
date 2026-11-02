@@ -79,9 +79,8 @@ impl Env {
     }
 
     fn config(&self) -> Config {
-        use borsh::BorshDeserialize;
         let key = config_address(&self.program).0;
-        Config::try_from_slice(&self.svm.get_account(&key).unwrap().data).unwrap()
+        musebook_credit_provider::governance::decode_config(&self.svm.get_account(&key).unwrap().data).unwrap()
     }
 
     fn init(&mut self) {
@@ -119,7 +118,7 @@ fn only_upgrade_authority_can_create_config_and_only_once() {
     let c = env.config();
     assert_eq!(
         (c.version, c.paused, c.admin),
-        (1, false, addr(&env.admin).to_bytes())
+        (2, false, addr(&env.admin).to_bytes())
     );
     let (ua, admin) = (addr(&env.ua), addr(&env.admin));
     let ua_kp = env.ua.insecure_clone();
@@ -233,4 +232,164 @@ fn unsigned_admin_and_non_admin_suspend_rejected() {
     let ledger = Address::new_from_array([5; 32]);
     let ix = client::set_ledger_suspended(&env.program, &addr(&eve), &ledger, true);
     assert_eq!(env.send(ix, &[&eve]), Err(custom(e::UNAUTHORIZED)));
+}
+
+// ---- set_issuer / config v2 ----
+
+const TOKEN: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+
+fn create_mint(env: &mut Env, payer: &Keypair) -> Address {
+    let mint = Keypair::new();
+    let token: Address = TOKEN.parse().unwrap();
+    let rent = env.svm.minimum_balance_for_rent_exemption(82);
+    let mut create = vec![0u8, 0, 0, 0];
+    create.extend(rent.to_le_bytes());
+    create.extend(82u64.to_le_bytes());
+    create.extend(token.to_bytes());
+    let create = Instruction {
+        program_id: Address::default(),
+        accounts: vec![
+            solana_instruction::AccountMeta::new(payer.pubkey(), true),
+            solana_instruction::AccountMeta::new(mint.pubkey(), true),
+        ],
+        data: create,
+    };
+    let mut init = vec![20u8, 0];
+    init.extend(payer.pubkey().to_bytes());
+    init.push(0);
+    let init = Instruction {
+        program_id: token,
+        accounts: vec![solana_instruction::AccountMeta::new(mint.pubkey(), false)],
+        data: init,
+    };
+    env.svm.expire_blockhash();
+    let tx = Transaction::new_signed_with_payer(
+        &[create, init],
+        Some(&payer.pubkey()),
+        &[payer, &mint],
+        env.svm.latest_blockhash(),
+    );
+    env.svm.send_transaction(tx).map_err(|f| format!("{:?} {:?}", f.err, f.meta.logs)).unwrap();
+    addr(&mint)
+}
+
+#[test]
+fn only_admin_sets_issuer_and_configured_issuer_gates_ledger_init() {
+    let mut env = setup();
+    env.init();
+    let admin = env.admin.insecure_clone();
+    let eve = funded(&mut env);
+    let issuer = funded(&mut env);
+    let p = env.program;
+    let ix = client::set_issuer(&p, &addr(&eve), &addr(&eve), &addr(&eve));
+    assert_eq!(env.send(ix, &[&eve]), Err(custom(e::UNAUTHORIZED)));
+    let logs = env
+        .send(
+            client::set_issuer(&p, &addr(&admin), &addr(&admin), &addr(&issuer)),
+            &[&admin],
+        )
+        .unwrap();
+    assert!(logs.iter().any(|l| l.starts_with("Program data: ")));
+    let c = env.config();
+    assert_eq!((c.version, c.issuer), (2, addr(&issuer).to_bytes()));
+
+    // Ledger init: the configured issuer works although it is NOT the upgrade authority.
+    let owner = funded(&mut env);
+    let mint = create_mint(&mut env, &owner);
+    let ua = env.ua.insecure_clone();
+    let ix = client::initialize(&p, &addr(&owner), &mint, &addr(&ua));
+    assert!(
+        env.send(ix, &[&owner, &ua]).is_err(),
+        "upgrade authority no longer issuer"
+    );
+    let ix = client::initialize(&p, &addr(&owner), &mint, &addr(&eve));
+    assert!(
+        env.send(ix, &[&owner, &eve]).is_err(),
+        "wrong issuer rejected"
+    );
+    let ix = client::initialize(&p, &addr(&owner), &mint, &addr(&issuer));
+    env.send(ix, &[&owner, &issuer]).unwrap();
+}
+
+#[test]
+fn legacy_rule_without_issuer_still_requires_upgrade_authority() {
+    let mut env = setup();
+    env.init();
+    let owner = funded(&mut env);
+    let mint = create_mint(&mut env, &owner);
+    let other = funded(&mut env);
+    let p = env.program;
+    let ix = client::initialize(&p, &addr(&owner), &mint, &addr(&other));
+    assert!(env.send(ix, &[&owner, &other]).is_err());
+    let ua = env.ua.insecure_clone();
+    env.send(
+        client::initialize(&p, &addr(&owner), &mint, &addr(&ua)),
+        &[&owner, &ua],
+    )
+    .unwrap();
+}
+
+#[test]
+fn v1_config_is_migrated_in_place_by_set_issuer() {
+    let mut env = setup();
+    let admin = env.admin.insecure_clone();
+    let p = env.program;
+    // Forge the exact on-chain v1 layout (67 bytes) as left by the first devnet deploy.
+    let (key, bump) = config_address(&p);
+    let mut data = vec![1u8, bump, 1];
+    data.extend(addr(&admin).to_bytes());
+    data.extend([0u8; 32]);
+    assert_eq!(data.len(), Config::LEN_V1);
+    let lamports = env.svm.minimum_balance_for_rent_exemption(Config::LEN_V1);
+    env.svm
+        .set_account(
+            key,
+            solana_account::Account {
+                lamports,
+                data,
+                owner: p,
+                executable: false,
+                rent_epoch: 0,
+            },
+        )
+        .unwrap();
+    let c = env.config();
+    assert_eq!(
+        (c.version, c.paused, c.admin),
+        (1, true, addr(&admin).to_bytes())
+    );
+    // v1 still fully usable (unpause) without migrating.
+    env.send(client::set_paused(&p, &addr(&admin), false), &[&admin])
+        .unwrap();
+    assert_eq!(
+        env.svm.get_account(&key).unwrap().data.len(),
+        Config::LEN_V1
+    );
+    let eve = funded(&mut env);
+    let ix = client::set_issuer(&p, &addr(&eve), &addr(&eve), &addr(&eve));
+    assert_eq!(env.send(ix, &[&eve]), Err(custom(e::UNAUTHORIZED)));
+    assert_eq!(
+        env.svm.get_account(&key).unwrap().data.len(),
+        Config::LEN_V1
+    );
+    let issuer = Keypair::new();
+    env.send(
+        client::set_issuer(&p, &addr(&admin), &addr(&admin), &addr(&issuer)),
+        &[&admin],
+    )
+    .unwrap();
+    let acc = env.svm.get_account(&key).unwrap();
+    assert_eq!(acc.data.len(), Config::LEN);
+    assert!(acc.lamports >= env.svm.minimum_balance_for_rent_exemption(Config::LEN));
+    let c = env.config();
+    assert_eq!(
+        (c.version, c.paused, c.admin, c.pending_admin, c.issuer),
+        (
+            2,
+            false,
+            addr(&admin).to_bytes(),
+            [0; 32],
+            addr(&issuer).to_bytes()
+        )
+    );
 }

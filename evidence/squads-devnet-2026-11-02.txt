@@ -22,3 +22,20 @@ SIG set_paused(0): execute: 2NLvxMjyuKUCyifvzCAv8CHGeTGHPw23MDz2D4ZKr9go11aWbE2K
 SIG set-upgrade-authority 97F68uhs… -> vault (BPFLoaderUpgradeable SetAuthority, slot 517916594): 62uJwroy4pwNkEh6m9XXbZebZBprgfaAf6j4BtPTZoK2tbFwZvryU2LiKe6u5N7C53463GwsGW1hH8zk9Z9nAk4
 VERIFY solana program show: Authority 2jBifstNwqWdrswEy8chotmVJcwfMRZkV7miqjR86qdx
 VERIFY Config: admin 2jBifstN…qdx, pending 0, paused false
+
+# v2 upgrade + set_issuer via Squads, 2026-11-02 (ET)
+SIG write-buffer FkASuGFBsUCUCnGQGqyJeYjpdG9JUo91RhHx1pAWaMNP (sha256 4af58a20…7c62e) set-buffer-authority -> vault (slot 517919944): zLyFksZ9WHUt4eEPVDuR47edgCCctaTqZ41JviA1omJn3bhQRepJYJERHv2y5bEuUUoKCdoGUu6e8b89ZsKYE9k
+SIG program upgrade (buffer FkASuG…): vault tx #4 create: 2ehXQQ6vLSCQuyfczYs6NMNQo3nmkLK5ob2YxFikNPbn1gDQVRzDEwSWG6KoWBVszZ3nYNavn4hRueUnWY46BhVJ
+SIG program upgrade (buffer FkASuG…): proposal create: 5udGLV88oyBMhwSynxF31RLBZp3CtW83TaLLQgHtVaE8iiJZ7GHQQ787gKP1hNrEEF93wBSWjpEdrbzCsfnyXYXM
+SIG program upgrade (buffer FkASuG…): approve (deployer): yhztA4U98xuox8HCevdUM5tqfShtxAu3WW3SrnUp5oYjskBWYUTEDUnymgTpHnch8oHUsyxwBP3gfqvabMKycSP
+SIG program upgrade (buffer FkASuG…): approve (member3): 5FCa4UpRkFn7LFYJnWxQtZETEXmtefEE21Nx1syXcA4X8td4EjVefbMpCYNf9m14U5GgHJSrzCjRvXaEi2ahgDZc
+SIG program upgrade (buffer FkASuG…): execute: beTCRxyCJigiye7u9ocomv7Hc9FxD1Vf72u32dHDPNp3arEnpWUAghkzQNGs9GTVSayPMtzs3VXe9CmuCtQC8FR
+SIG fund vault 0.002 SOL (pays config v1->v2 migration rent): 43SJ8jPC3jEarK7p4P8tiWW8xRHj8NT3kmK9BrrLbmEw8dHb2Wt1pv2qdkW7efsyKhusAJWdn8AuvSiPGHf9rSKA
+SIG set_issuer (migrates config v1->v2): vault tx #5 create: fDH7xcyaAko4v2Wr82K297LjM5cca1LWZ7sMhkcE7qZ3QZZcUGmLDTTQq1qpmLr9CRNg1hHTuWquoBdP2A3TanX
+SIG set_issuer (migrates config v1->v2): proposal create: 5tGpkGNEkNapJYkk9KExEvFehTY8oEJgiEdWVKuZUuESomLEKR7tD3QdTGCDBvKD52ZcNJok42GMFvhByMqiPEV
+SIG set_issuer (migrates config v1->v2): approve (deployer): 58G4ukNgpK3kCYZ733Reyq89MvioZG7ZBxy97GhT6YEKdL1Td1MknXQnopBDpaYJnjyEdWH4BHyRXJDoWzeG9QfZ
+SIG set_issuer (migrates config v1->v2): approve (member3): 2xbDw7HowNJE3BqFPbeABjTVSvABrSo3FmZrx5zkjXgocmhsJBpYJTyPEyAEgkECEisw9jkyWT2noeeHRYbFDzZ9
+SIG set_issuer (migrates config v1->v2): execute: 4vABrtwuY1jrq9G8CiqshWS9whJpSJMxyv6usssBH8r3xo2aQz2sBgD9kzgEFqQY6Gtfvw1MGmGUzjV9Vnzf2cpD
+SIG direct set_issuer by old deployer key REJECTED on-chain {"InstructionError":[0,{"Custom":1296171010}]}: 2va9rwtJwML4xqfv8p5THpHSqSkBMbimDCsPXwCzStPNBE3dW29N7gMPYZ7qWU1PT1o1UdXJ5WaGL6RXtqEMMD2c
+VERIFY program last deployed slot 517920049; on-chain ELF (first 87240 B) sha256 4af58a20ee217e920cd050f311f8f99b86ffedd075a07f482f7aad8f41f7c62e == build; buffer closed
+VERIFY config 99 B v2, admin vault, issuer 8CBpS8SE5SpasbvS6LL8Y3JqWYDdAmVL9MhwPHCGuX1v

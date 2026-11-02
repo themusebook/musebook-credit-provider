@@ -2,6 +2,7 @@
 
 ## Ready
 - Scope is frozen per commit. Small program (~1.1k LoC Rust, Pinocchio, no_std). The diff against upstream `payment-channels@23193ab examples/credit-provider` is readable (seed, entrypoint, governance, events, ledger `suspended`).
+- Separate issuer via `set_issuer`, with v1→v2 config migration, deployed to devnet through a Squads upgrade proposal (hash verified).
 - Squads v4 2-of-3 vault is admin and upgrade authority on devnet, with pause and unpause proven through vault transactions.
 - Governance: config PDA, admin (multisig-capable), two-step handover, global pause, per-ledger suspension, `sol_log_data` events.
 - Devnet deployment `97F68uhs…` (slot 517910524) whose on-chain ELF matches the verifiable build hash, plus a full hook e2e on devnet (62 PASS, docs/DEVNET.md).
@@ -12,7 +13,8 @@
 ## Not ready
 - **No containerized `solana-verify` hash** (no Docker on the build box).
 - **Global pause cannot gate `pre_fund`** without a hook-ABI change. Relies on per-ledger suspension. Needs a maintainer decision.
-- **Issuer equals the upgrade authority** at ledger init. Needs a `Config.issuer` decision before the upgrade authority moves to Squads.
+- **Issuer rotation does not re-key existing ledgers.** Each ledger keeps its init-time issuer. Revoking it relies on suspension.
+- **CU variance:** PDA bump searches repeat on every callback, so a hooked `open` can exceed the 200k default (seen once on Surfpool). Clients must set a CU limit. Fix: store bumps in the ledger.
 - **No ledger close / credit redemption / migration path.**
 - **Devnet `CHNLxBt…` not byte-verified** against `23193ab`.
 - **No fuzzing or property tests.** No formal CU budget test in CI (CU only observed in e2e logs).
