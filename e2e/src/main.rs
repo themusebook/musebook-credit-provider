@@ -806,6 +806,14 @@ impl<'a> Fixture<'a> {
             .unwrap();
     }
     fn rejects(&self, label: &str, ix: Instruction, issuer: bool) {
+        self.rejects_with(
+            label,
+            ix,
+            issuer,
+            json!({"InstructionError":[0,"InvalidAccountData"]}),
+        );
+    }
+    fn rejects_with(&self, label: &str, ix: Instruction, issuer: bool, expected: Value) {
         let before = self.snapshot();
         let signers = if issuer {
             vec![&self.owner, self.issuer]
@@ -816,11 +824,7 @@ impl<'a> Fixture<'a> {
             .rpc
             .send(label, &[ix], &self.owner, &signers)
             .expect_err(label);
-        assert_eq!(
-            error["err"],
-            json!({"InstructionError":[0,"InvalidAccountData"]}),
-            "{label}: intended error"
-        );
+        assert_eq!(error["err"], expected, "{label}: intended error");
         assert_eq!(self.snapshot(), before, "{label}: rollback");
         println!("PASS {label}: rejected, all custody/channel accounts unchanged");
     }
@@ -884,9 +888,108 @@ fn main() {
         rpc.account(provider.pubkey())["owner"],
         musebook_credit_provider::LOADER.to_string()
     );
+    let program = address(provider.pubkey());
+    let gov = address(issuer.pubkey());
+    // Devnet stand-in: the issuer key is both upgrade authority and admin.
+    // Production: admin = Squads v4 vault PDA (see docs/GOVERNANCE.md).
+    rpc.send(
+        "initialize governance config (upgrade-authority gated)",
+        &[client::initialize_config(&program, &gov, &gov, &gov)],
+        &issuer,
+        &[&issuer],
+    )
+    .unwrap();
     let mut f = Fixture::new(&rpc, provider.pubkey(), &issuer);
+    let paused_err = json!({"InstructionError":[0,{"Custom": musebook_credit_provider::governance_error::PAUSED}]});
+    let suspended_err = json!({"InstructionError":[0,{"Custom": musebook_credit_provider::governance_error::SUSPENDED}]});
+    let unauthorized_err = json!({"InstructionError":[0,{"Custom": musebook_credit_provider::governance_error::UNAUTHORIZED}]});
+    f.rejects_with(
+        "non-admin owner cannot pause",
+        client::set_paused(&program, &address(f.owner.pubkey()), true),
+        false,
+        unauthorized_err.clone(),
+    );
+    rpc.send(
+        "admin pauses",
+        &[client::set_paused(&program, &gov, true)],
+        &issuer,
+        &[&issuer],
+    )
+    .unwrap();
+    f.rejects_with(
+        "paused: deposit blocked",
+        client::deposit(
+            &program,
+            &address(f.owner.pubkey()),
+            &address(f.mint),
+            2_000,
+        ),
+        false,
+        paused_err.clone(),
+    );
+    rpc.send(
+        "admin unpauses",
+        &[client::set_paused(&program, &gov, false)],
+        &issuer,
+        &[&issuer],
+    )
+    .unwrap();
     f.deposit(2_000);
+    rpc.send(
+        "admin pauses again",
+        &[client::set_paused(&program, &gov, true)],
+        &issuer,
+        &[&issuer],
+    )
+    .unwrap();
+    f.approve(1_500);
+    let mut paused_auth = f.auth;
+    paused_auth.nonce = 1;
+    paused_auth.cap = 1_500;
+    f.rejects_with(
+        "paused: new hook approval (authorize) blocked",
+        f.authorize_ix(issuer.pubkey(), paused_auth),
+        true,
+        paused_err,
+    );
+    rpc.send(
+        "admin unpauses",
+        &[client::set_paused(&program, &gov, false)],
+        &issuer,
+        &[&issuer],
+    )
+    .unwrap();
     f.authorize(1_500, 1, 1);
+    rpc.send(
+        "admin suspends ledger",
+        &[client::set_ledger_suspended(
+            &program,
+            &gov,
+            &address(f.ledger),
+            true,
+        )],
+        &issuer,
+        &[&issuer],
+    )
+    .unwrap();
+    f.rejects_with(
+        "suspended ledger: pre_fund hook rejects open",
+        f.open(1_000),
+        false,
+        suspended_err,
+    );
+    rpc.send(
+        "admin lifts ledger suspension",
+        &[client::set_ledger_suspended(
+            &program,
+            &gov,
+            &address(f.ledger),
+            false,
+        )],
+        &issuer,
+        &[&issuer],
+    )
+    .unwrap();
     let mut replay = f.auth;
     f.rejects(
         "reject overlapping authorization",

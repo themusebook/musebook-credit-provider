@@ -5,8 +5,9 @@ use pinocchio::Address;
 use solana_instruction::{AccountMeta, Instruction};
 
 use crate::{
-    AUTHORIZE, Authorization, CANCEL_UNFUNDED, DEPOSIT, INITIALIZE, LOADER, ata_address,
-    hook_state, ledger_address,
+    ACCEPT_ADMIN, AUTHORIZE, Authorization, CANCEL_UNFUNDED, DEPOSIT, INITIALIZE,
+    INITIALIZE_CONFIG, LOADER, PROPOSE_ADMIN, SET_LEDGER_SUSPENDED, SET_PAUSED, ata_address,
+    config_address, hook_state, ledger_address,
 };
 
 fn meta(address: Address, writable: bool, signer: bool) -> AccountMeta {
@@ -60,6 +61,7 @@ pub fn deposit(program: &Address, owner: &Address, mint: &Address, amount: u64) 
             meta(ata_address(&ledger, mint), true, false),
             meta(ata_address(owner, mint), true, false),
             meta(pinocchio_token::ID, false, false),
+            meta(config_address(program).0, false, false),
         ],
         data,
     )
@@ -84,6 +86,7 @@ pub fn authorize(
             meta(ata_address(&ledger, mint), true, false),
             meta(ata_address(owner, mint), true, false),
             meta(pinocchio_token::ID, false, false),
+            meta(config_address(program).0, false, false),
         ],
         data,
     )
@@ -109,6 +112,73 @@ pub fn cancel_unfunded(
 }
 
 /// Pass this sparse configuration to the existing V2 `open` builder.
+/// Create the governance config. `upgrade_authority` must sign.
+pub fn initialize_config(
+    program: &Address,
+    payer: &Address,
+    upgrade_authority: &Address,
+    admin: &Address,
+) -> Instruction {
+    let program_data = Address::find_program_address(&[program.as_ref()], &LOADER).0;
+    let mut data = vec![INITIALIZE_CONFIG];
+    data.extend_from_slice(admin.as_ref());
+    instruction(
+        program,
+        vec![
+            meta(*payer, true, true),
+            meta(config_address(program).0, true, false),
+            meta(*program, false, false),
+            meta(program_data, false, false),
+            meta(*upgrade_authority, false, true),
+            meta(pinocchio_system::ID, false, false),
+        ],
+        data,
+    )
+}
+
+fn admin_ix(program: &Address, signer: &Address, data: Vec<u8>) -> Instruction {
+    instruction(
+        program,
+        vec![
+            meta(*signer, false, true),
+            meta(config_address(program).0, true, false),
+        ],
+        data,
+    )
+}
+
+pub fn set_paused(program: &Address, admin: &Address, paused: bool) -> Instruction {
+    admin_ix(program, admin, vec![SET_PAUSED, paused as u8])
+}
+
+/// `new_admin` may be a Squads v4 vault PDA. All-zero cancels.
+pub fn propose_admin(program: &Address, admin: &Address, new_admin: &Address) -> Instruction {
+    let mut data = vec![PROPOSE_ADMIN];
+    data.extend_from_slice(new_admin.as_ref());
+    admin_ix(program, admin, data)
+}
+
+pub fn accept_admin(program: &Address, new_admin: &Address) -> Instruction {
+    admin_ix(program, new_admin, vec![ACCEPT_ADMIN])
+}
+
+pub fn set_ledger_suspended(
+    program: &Address,
+    admin: &Address,
+    ledger: &Address,
+    suspended: bool,
+) -> Instruction {
+    instruction(
+        program,
+        vec![
+            meta(*admin, false, true),
+            meta(config_address(program).0, false, false),
+            meta(*ledger, true, false),
+        ],
+        vec![SET_LEDGER_SUSPENDED, suspended as u8],
+    )
+}
+
 pub fn hook_config(program: &Address, owner: &Address, mint: &Address) -> Vec<u8> {
     let state = hook_state(program, owner, mint);
     let mut bytes = Vec::new();
@@ -146,7 +216,7 @@ pub fn hook_tail(
     );
     let state = hook_state(program, owner, mint);
     let authority = payment_channel_interface::hooks::hook_authority(
-        &payment_channel_interface::ID,
+        &crate::CHANNEL_PROGRAM,
         channel,
         &state.commitment,
         payment_channel_interface::hooks::Phase::try_from(phase).unwrap(),

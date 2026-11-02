@@ -3,8 +3,8 @@
 API credit provider for [musebook.trade](https://musebook.trade), built for Pay's
 credit-provider model (preFund / postDistribute hooks on payment-channel V2).
 
-> **Status: local test code only. Not deployed anywhere.** No devnet or mainnet
-> program exists. This is not a security certification and not an endorsement.
+> **Status: pre-audit test code. Not deployed** (devnet deploy prepared, blocked on
+> faucet SOL; see docs/DEVNET.md). No mainnet program exists. This is not a security certification and not an endorsement.
 > Pay and pay-kit don't emit `*WithHooks` channel instructions yet, so the
 > `musebook` provider name stays **unavailable** in both of them.
 
@@ -18,6 +18,12 @@ What changed from upstream:
 - ledger PDA seed `b"musebook-credit"` (upstream uses `b"credit"`)
 - callback entrypoint `b"musebook"` (upstream uses `b"credit!!"`)
 - the e2e harness also prints the wire size of each transaction
+- governance: config PDA, multisig-capable admin, emergency pause, per-ledger
+  suspension and `sol_log_data` events (docs/GOVERNANCE.md)
+- `devnet-deployment` feature trusting the devnet V2 channel `CHNLxBt…`
+
+Docs: [GOVERNANCE](docs/GOVERNANCE.md) · [BUILD](docs/BUILD.md) · [DEVNET](docs/DEVNET.md) ·
+[THREAT_MODEL](docs/THREAT_MODEL.md) · [AUDIT_READINESS](docs/AUDIT_READINESS.md)
 
 The instruction logic and custody rules are the same as upstream. Hooks use the
 payment-channel-interface SDK (`HookContext::decode_callback`, plus `validate_callback`, which checks the channel account through

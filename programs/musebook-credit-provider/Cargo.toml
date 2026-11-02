@@ -12,6 +12,7 @@ crate-type = ["lib", "cdylib"]
 [features]
 default = []
 no-entrypoint = []
+devnet-deployment = []
 client = ["no-entrypoint", "dep:solana-instruction"]
 
 [dependencies]
@@ -23,6 +24,7 @@ pinocchio-associated-token-account = "0.4.0"
 solana-address = { version = "2", features = ["curve25519", "borsh"] }
 borsh = { version = "1", default-features = false, features = ["derive"] }
 solana-instruction = { version = "3", optional = true }
+solana-define-syscall = "5.2"
 
 [target.'cfg(not(target_os = "solana"))'.dependencies]
 const-crypto = "0.3"
