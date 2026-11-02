@@ -204,6 +204,25 @@ impl Rpc {
         signers: &[&Keypair],
     ) -> Result<String, Value> {
         let hash = self.call("getLatestBlockhash", json!([{"commitment":"confirmed"}]))["value"]["blockhash"].as_str().unwrap().to_owned();
+        // Hooked channel txs run the provider callback inside the channel
+        // instruction; PDA bump searches make CU vary per key set, so request
+        // an explicit limit (as a merchant/facilitator should).
+        let mut with_budget;
+        let mut budgeted = false;
+        let ixs = if ixs.iter().any(|ix| ix.program_id == channel_program()) {
+            let mut data = vec![2u8];
+            data.extend(400_000u32.to_le_bytes());
+            with_budget = vec![Instruction {
+                program_id: id("ComputeBudget111111111111111111111111111111"),
+                accounts: vec![],
+                data,
+            }];
+            with_budget.extend_from_slice(ixs);
+            budgeted = true;
+            &with_budget[..]
+        } else {
+            ixs
+        };
         let tx = Transaction::new_signed_with_payer(
             ixs,
             Some(&payer.pubkey()),
@@ -234,6 +253,13 @@ impl Rpc {
                 .clone();
             if !status.is_null() {
                 if !status["err"].is_null() {
+                    let mut status = status;
+                    // Report errors relative to the caller's instructions.
+                    if budgeted {
+                        if let Some(i) = status["err"]["InstructionError"][0].as_u64() {
+                            status["err"]["InstructionError"][0] = json!(i.saturating_sub(1));
+                        }
+                    }
                     return Err(status);
                 }
                 if matches!(
@@ -498,20 +524,8 @@ impl<'a> Fixture<'a> {
         );
         let mut missing_signature = initialize.clone();
         missing_signature.accounts[5].is_signer = false;
-        let mut substituted_program_data = initialize.clone();
-        substituted_program_data.accounts[4].pubkey = Pubkey::find_program_address(
-            &[channel_program().as_ref()],
-            &key(musebook_credit_provider::LOADER),
-        )
-        .0;
-        for (label, ix, signers) in [
-            ("missing issuer signature", missing_signature, vec![&owner]),
-            (
-                "substituted ProgramData",
-                substituted_program_data,
-                vec![&owner, issuer],
-            ),
-        ] {
+        for (label, ix, signers) in [("missing issuer signature", missing_signature, vec![&owner])]
+        {
             let error = rpc.send(label, &[ix], &owner, &signers).expect_err(label);
             assert_eq!(
                 error["err"],
@@ -868,7 +882,7 @@ impl<'a> Fixture<'a> {
     }
 }
 
-fn surfpool_setup(rpc: &Rpc) -> (Keypair, Pubkey) {
+fn surfpool_setup(rpc: &Rpc) -> (Option<Keypair>, Keypair, Pubkey) {
     let dir = PathBuf::from(std::env::var_os("CREDIT_E2E_RUN_DIR").unwrap());
     let issuer = Keypair::new();
     let provider = Keypair::new();
@@ -922,13 +936,30 @@ fn surfpool_setup(rpc: &Rpc) -> (Keypair, Pubkey) {
         musebook_credit_provider::LOADER.to_string()
     );
     let id = provider.pubkey();
-    init_config(rpc, &issuer, id);
-    (issuer, id)
+    // `issuer` here is the upgrade authority; it becomes the admin, and a
+    // separate issuer key is configured with `set_issuer`.
+    let admin = issuer;
+    init_config(rpc, &admin, id);
+    let issuer = Keypair::new();
+    let a = address(admin.pubkey());
+    rpc.send(
+        "admin sets separate issuer (config v2)",
+        &[client::set_issuer(
+            &address(id),
+            &a,
+            &a,
+            &address(issuer.pubkey()),
+        )],
+        &admin,
+        &[&admin],
+    )
+    .unwrap();
+    (Some(admin), issuer, id)
 }
 
 /// Devnet: the program is already deployed by scripts/devnet-deploy.sh; the
 /// deployer is the upgrade authority, issuer and (stand-in) admin.
-fn devnet_setup(rpc: &Rpc) -> (Keypair, Pubkey) {
+fn devnet_setup(rpc: &Rpc) -> (Option<Keypair>, Keypair, Pubkey) {
     let id: Pubkey = std::env::var("CREDIT_E2E_PROGRAM")
         .expect("CREDIT_E2E_PROGRAM")
         .parse()
@@ -939,14 +970,24 @@ fn devnet_setup(rpc: &Rpc) -> (Keypair, Pubkey) {
         "devnet channel program"
     );
     assert_eq!(rpc.account(id)["executable"], true, "provider deployed");
-    let issuer = funder().insecure_clone();
+    // Configured issuer (set via a Squads proposal); never printed.
+    let path = std::env::var("CREDIT_E2E_ISSUER").expect("CREDIT_E2E_ISSUER");
+    let bytes: Vec<u8> = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let issuer = Keypair::try_from(&bytes[..]).unwrap();
     let config = key(musebook_credit_provider::config_address(&address(id)).0);
-    if rpc.account(config).is_null() {
-        init_config(rpc, &issuer, id);
-    } else {
-        println!("config already initialized: {config}");
-    }
-    (issuer, id)
+    let cfg = musebook_credit_provider::governance::decode_config(&rpc.data(config)).unwrap();
+    assert_eq!(
+        cfg.issuer,
+        issuer.pubkey().to_bytes(),
+        "config issuer must be CREDIT_E2E_ISSUER"
+    );
+    println!(
+        "config v{} admin {} issuer {}",
+        cfg.version,
+        Pubkey::from(cfg.admin),
+        issuer.pubkey()
+    );
+    (None, issuer, id)
 }
 
 fn init_config(rpc: &Rpc, issuer: &Keypair, id: Pubkey) {
@@ -964,148 +1005,160 @@ fn init_config(rpc: &Rpc, issuer: &Keypair, id: Pubkey) {
 
 fn main() {
     let rpc = Rpc::new();
-    let (issuer, provider_id) = if DEVNET {
+    let (admin, issuer, provider) = if DEVNET {
         devnet_setup(&rpc)
     } else {
         surfpool_setup(&rpc)
     };
-    let provider = provider_id;
     let program = address(provider);
-    let gov = address(issuer.pubkey());
     let mut f = Fixture::new(&rpc, provider, &issuer);
-    let paused_err = json!({"InstructionError":[0,{"Custom": musebook_credit_provider::governance_error::PAUSED}]});
-    let suspended_err = json!({"InstructionError":[0,{"Custom": musebook_credit_provider::governance_error::SUSPENDED}]});
-    let unauthorized_err = json!({"InstructionError":[0,{"Custom": musebook_credit_provider::governance_error::UNAUTHORIZED}]});
-    f.rejects_with(
-        "non-admin owner cannot pause",
-        client::set_paused(&program, &address(f.owner.pubkey()), true),
-        false,
-        unauthorized_err.clone(),
-    );
-    rpc.send(
-        "admin pauses",
-        &[client::set_paused(&program, &gov, true)],
-        &issuer,
-        &[&issuer],
-    )
-    .unwrap();
-    f.rejects_with(
-        "paused: deposit blocked",
-        client::deposit(
-            &program,
-            &address(f.owner.pubkey()),
-            &address(f.mint),
-            2_000,
-        ),
-        false,
-        paused_err.clone(),
-    );
-    rpc.send(
-        "admin unpauses",
-        &[client::set_paused(&program, &gov, false)],
-        &issuer,
-        &[&issuer],
-    )
-    .unwrap();
-    f.deposit(2_000);
-    rpc.send(
-        "admin pauses again",
-        &[client::set_paused(&program, &gov, true)],
-        &issuer,
-        &[&issuer],
-    )
-    .unwrap();
-    f.approve(1_500);
-    let mut paused_auth = f.auth;
-    paused_auth.nonce = 1;
-    paused_auth.cap = 1_500;
-    f.rejects_with(
-        "paused: new hook approval (authorize) blocked",
-        f.authorize_ix(issuer.pubkey(), paused_auth),
-        true,
-        paused_err,
-    );
-    rpc.send(
-        "admin unpauses",
-        &[client::set_paused(&program, &gov, false)],
-        &issuer,
-        &[&issuer],
-    )
-    .unwrap();
-    f.authorize(1_500, 1, 1);
-    rpc.send(
-        "admin suspends ledger",
-        &[client::set_ledger_suspended(
-            &program,
-            &gov,
-            &address(f.ledger),
-            true,
-        )],
-        &issuer,
-        &[&issuer],
-    )
-    .unwrap();
-    f.rejects_with(
-        "suspended ledger: pre_fund hook rejects open",
-        f.open(1_000),
-        false,
-        suspended_err,
-    );
-    rpc.send(
-        "admin lifts ledger suspension",
-        &[client::set_ledger_suspended(
-            &program,
-            &gov,
-            &address(f.ledger),
+    if let Some(admin) = &admin {
+        let gov = address(admin.pubkey());
+        let paused_err = json!({"InstructionError":[0,{"Custom": musebook_credit_provider::governance_error::PAUSED}]});
+        let suspended_err = json!({"InstructionError":[0,{"Custom": musebook_credit_provider::governance_error::SUSPENDED}]});
+        let unauthorized_err = json!({"InstructionError":[0,{"Custom": musebook_credit_provider::governance_error::UNAUTHORIZED}]});
+        f.rejects_with(
+            "non-admin owner cannot pause",
+            client::set_paused(&program, &address(f.owner.pubkey()), true),
             false,
-        )],
-        &issuer,
-        &[&issuer],
-    )
-    .unwrap();
-    // Two-step admin handover to a fresh key and back (Squads vault stand-in).
-    let next = Keypair::new();
-    let n = address(next.pubkey());
-    rpc.send(
-        "admin proposes new admin",
-        &[client::propose_admin(&program, &gov, &n)],
-        &issuer,
-        &[&issuer],
-    )
-    .unwrap();
-    f.rejects_with(
-        "non-pending key cannot accept admin",
-        client::accept_admin(&program, &address(f.owner.pubkey())),
-        false,
-        unauthorized_err.clone(),
-    );
-    rpc.send(
-        "pending admin accepts",
-        &[client::accept_admin(&program, &n)],
-        &issuer,
-        &[&issuer, &next],
-    )
-    .unwrap();
-    f.rejects_with(
-        "old admin can no longer pause",
-        client::set_paused(&program, &gov, true),
-        true,
-        unauthorized_err.clone(),
-    );
-    rpc.send(
-        "new admin proposes handback",
-        &[client::propose_admin(&program, &n, &gov)],
-        &issuer,
-        &[&issuer, &next],
-    )
-    .unwrap();
-    rpc.send(
-        "original admin accepts handback",
-        &[client::accept_admin(&program, &gov)],
-        &issuer,
-        &[&issuer],
-    )
-    .unwrap();
+            unauthorized_err.clone(),
+        );
+        rpc.send(
+            "admin pauses",
+            &[client::set_paused(&program, &gov, true)],
+            admin,
+            &[admin],
+        )
+        .unwrap();
+        f.rejects_with(
+            "paused: deposit blocked",
+            client::deposit(
+                &program,
+                &address(f.owner.pubkey()),
+                &address(f.mint),
+                2_000,
+            ),
+            false,
+            paused_err.clone(),
+        );
+        rpc.send(
+            "admin unpauses",
+            &[client::set_paused(&program, &gov, false)],
+            admin,
+            &[admin],
+        )
+        .unwrap();
+        f.deposit(2_000);
+        rpc.send(
+            "admin pauses again",
+            &[client::set_paused(&program, &gov, true)],
+            admin,
+            &[admin],
+        )
+        .unwrap();
+        f.approve(1_500);
+        let mut paused_auth = f.auth;
+        paused_auth.nonce = 1;
+        paused_auth.cap = 1_500;
+        f.rejects_with(
+            "paused: new hook approval (authorize) blocked",
+            f.authorize_ix(issuer.pubkey(), paused_auth),
+            true,
+            paused_err,
+        );
+        rpc.send(
+            "admin unpauses",
+            &[client::set_paused(&program, &gov, false)],
+            admin,
+            &[admin],
+        )
+        .unwrap();
+        f.authorize(1_500, 1, 1);
+        rpc.send(
+            "admin suspends ledger",
+            &[client::set_ledger_suspended(
+                &program,
+                &gov,
+                &address(f.ledger),
+                true,
+            )],
+            admin,
+            &[admin],
+        )
+        .unwrap();
+        f.rejects_with(
+            "suspended ledger: pre_fund hook rejects open",
+            f.open(1_000),
+            false,
+            suspended_err,
+        );
+        rpc.send(
+            "admin lifts ledger suspension",
+            &[client::set_ledger_suspended(
+                &program,
+                &gov,
+                &address(f.ledger),
+                false,
+            )],
+            admin,
+            &[admin],
+        )
+        .unwrap();
+        // Two-step admin handover to a fresh key and back (Squads vault stand-in).
+        let next = Keypair::new();
+        let n = address(next.pubkey());
+        rpc.send(
+            "admin proposes new admin",
+            &[client::propose_admin(&program, &gov, &n)],
+            admin,
+            &[admin],
+        )
+        .unwrap();
+        f.rejects_with(
+            "non-pending key cannot accept admin",
+            client::accept_admin(&program, &address(f.owner.pubkey())),
+            false,
+            unauthorized_err.clone(),
+        );
+        rpc.send(
+            "pending admin accepts",
+            &[client::accept_admin(&program, &n)],
+            admin,
+            &[admin, &next],
+        )
+        .unwrap();
+        let before = f.snapshot();
+        let error = rpc
+            .send(
+                "old admin can no longer pause",
+                &[client::set_paused(&program, &gov, true)],
+                admin,
+                &[admin],
+            )
+            .expect_err("old admin must be rejected");
+        assert_eq!(error["err"], unauthorized_err);
+        assert_eq!(f.snapshot(), before);
+        println!("PASS old admin can no longer pause: rejected");
+        rpc.send(
+            "new admin proposes handback",
+            &[client::propose_admin(&program, &n, &gov)],
+            admin,
+            &[admin, &next],
+        )
+        .unwrap();
+        rpc.send(
+            "original admin accepts handback",
+            &[client::accept_admin(&program, &gov)],
+            admin,
+            &[admin],
+        )
+        .unwrap();
+    } else {
+        // Devnet: admin is the Squads vault; governance flows run as Squads
+        // proposals (scripts/squads-devnet). Here: the credit/hook flow only.
+        f.deposit(2_000);
+        f.authorize(1_500, 1, 1);
+    }
     let mut replay = f.auth;
     f.rejects(
         "reject overlapping authorization",

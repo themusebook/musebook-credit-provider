@@ -101,13 +101,19 @@ pub fn initialize(program: &Address, accounts: &mut [AccountView]) -> ProgramRes
         program_data,
         issuer,
         system,
+        config,
     ] = accounts
     else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
     require(owner.is_signer() && owner.is_writable() && issuer.is_signer())?;
     require(*system.address() == pinocchio_system::ID && system.executable())?;
-    verify_upgrade_authority(program, executable, program_data, issuer)?;
+    match crate::governance::configured_issuer(&load_config(program, config)?) {
+        // Explicit issuer set by the admin (Squads) via `set_issuer`.
+        Some(expected) => require(issuer.address().as_array() == &expected)?,
+        // Legacy rule: the issuer is the current upgrade authority.
+        None => verify_upgrade_authority(program, executable, program_data, issuer)?,
+    }
     let mint_state = Mint::from_account_view(mint)?;
     require(mint_state.is_initialized())?;
     drop(mint_state);

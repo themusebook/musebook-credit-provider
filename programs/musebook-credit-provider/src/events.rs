@@ -15,6 +15,7 @@ pub const DEPOSITED: &[u8] = b"deposited";
 pub const AUTHORIZED: &[u8] = b"authorized";
 pub const PRE_FUND: &[u8] = b"pre_fund";
 pub const POST_DISTRIBUTE: &[u8] = b"post_distribute";
+pub const ISSUER_SET: &[u8] = b"issuer_set";
 pub const CANCELED: &[u8] = b"cancel_unfunded";
 
 /// `name` and up to six fields.

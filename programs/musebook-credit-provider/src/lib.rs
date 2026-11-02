@@ -38,6 +38,7 @@ pub const SET_PAUSED: u8 = 5;
 pub const PROPOSE_ADMIN: u8 = 6;
 pub const ACCEPT_ADMIN: u8 = 7;
 pub const SET_LEDGER_SUSPENDED: u8 = 8;
+pub const SET_ISSUER: u8 = 9;
 /// Program-wide governance config PDA: `[CONFIG_SEED]`.
 /// The payment-channels program whose callbacks are trusted. Default is the
 /// canonical `CHNLxYv…` ID; `devnet-deployment` selects the alternate devnet
@@ -106,10 +107,16 @@ pub struct Config {
     pub admin: [u8; 32],
     /// Two-step handover target; all-zero when none is pending.
     pub pending_admin: [u8; 32],
+    /// v2: issuer that co-signs ledger `initialize`. All-zero = legacy rule
+    /// (issuer must be the program's current upgrade authority).
+    pub issuer: [u8; 32],
 }
 
 impl Config {
-    pub const LEN: usize = 67;
+    /// Current (v2) size.
+    pub const LEN: usize = 99;
+    /// v1 size (no `issuer`); migrated in place by `set_issuer`.
+    pub const LEN_V1: usize = 67;
 }
 
 pub fn config_address(program: &Address) -> (Address, u8) {
@@ -203,6 +210,9 @@ pub fn process_instruction(
             governance::propose_admin(program, accounts, address_arg(bytes)?)
         }
         Some((&ACCEPT_ADMIN, [])) => governance::accept_admin(program, accounts),
+        Some((&SET_ISSUER, bytes)) => {
+            governance::set_issuer(program, accounts, address_arg(bytes)?)
+        }
         Some((&SET_LEDGER_SUSPENDED, [flag])) => {
             governance::set_ledger_suspended(program, accounts, bool_arg(*flag)?)
         }

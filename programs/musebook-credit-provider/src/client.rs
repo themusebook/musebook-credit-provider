@@ -6,8 +6,8 @@ use solana_instruction::{AccountMeta, Instruction};
 
 use crate::{
     ACCEPT_ADMIN, AUTHORIZE, Authorization, CANCEL_UNFUNDED, DEPOSIT, INITIALIZE,
-    INITIALIZE_CONFIG, LOADER, PROPOSE_ADMIN, SET_LEDGER_SUSPENDED, SET_PAUSED, ata_address,
-    config_address, hook_state, ledger_address,
+    INITIALIZE_CONFIG, LOADER, PROPOSE_ADMIN, SET_ISSUER, SET_LEDGER_SUSPENDED, SET_PAUSED,
+    ata_address, config_address, hook_state, ledger_address,
 };
 
 fn meta(address: Address, writable: bool, signer: bool) -> AccountMeta {
@@ -44,6 +44,7 @@ pub fn initialize(
             meta(program_data, false, false),
             meta(*issuer, false, true),
             meta(pinocchio_system::ID, false, false),
+            meta(config_address(program).0, false, false),
         ],
         vec![INITIALIZE],
     )
@@ -160,6 +161,28 @@ pub fn propose_admin(program: &Address, admin: &Address, new_admin: &Address) ->
 
 pub fn accept_admin(program: &Address, new_admin: &Address) -> Instruction {
     admin_ix(program, new_admin, vec![ACCEPT_ADMIN])
+}
+
+/// Admin-only. `payer` funds the one-time v1 -> v2 config migration rent and
+/// may equal `admin`.
+pub fn set_issuer(
+    program: &Address,
+    admin: &Address,
+    payer: &Address,
+    issuer: &Address,
+) -> Instruction {
+    let mut data = vec![SET_ISSUER];
+    data.extend_from_slice(issuer.as_ref());
+    let mut accounts = vec![
+        meta(*admin, false, true),
+        meta(config_address(program).0, true, false),
+    ];
+    if payer == admin {
+        accounts[0].is_writable = true;
+    }
+    accounts.push(meta(*payer, true, true));
+    accounts.push(meta(pinocchio_system::ID, false, false));
+    instruction(program, accounts, data)
 }
 
 pub fn set_ledger_suspended(

@@ -17,7 +17,7 @@ client = ["no-entrypoint", "dep:solana-instruction"]
 
 [dependencies]
 payment-channel-interface = { path = "../../vendor/payment-channels/crates/interface" }
-pinocchio = { version = "0.11.1", features = ["cpi"] }
+pinocchio = { version = "0.11.1", features = ["cpi", "account-resize"] }
 pinocchio-token = "0.6.0"
 pinocchio-system = "0.6.0"
 pinocchio-associated-token-account = "0.4.0"
