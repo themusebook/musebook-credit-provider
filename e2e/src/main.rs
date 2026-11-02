@@ -119,6 +119,17 @@ static FUNDED: std::sync::Mutex<Vec<[u8; 64]>> = std::sync::Mutex::new(Vec::new(
 fn track(kp: &Keypair) {
     if DEVNET {
         FUNDED.lock().unwrap_or_else(|e| e.into_inner()).push(kp.to_bytes());
+        // Persist before funding (track() runs before fund()) so a crash can't strand SOL.
+        if let Some(path) = std::env::var_os("CREDIT_E2E_KEYS_FILE") {
+            use std::io::Write;
+            #[cfg(unix)] use std::os::unix::fs::OpenOptionsExt;
+            let mut o = std::fs::OpenOptions::new();
+            o.create(true).append(true);
+            #[cfg(unix)] o.mode(0o600);
+            let mut f = o.open(path).expect("CREDIT_E2E_KEYS_FILE");
+            writeln!(f, "{}", serde_json::to_string(&kp.to_bytes().to_vec()).unwrap()).unwrap();
+            f.sync_all().unwrap();
+        }
     }
 }
 struct Sweep;
