@@ -1,0 +1,24 @@
+# Squads v4 devnet governance run, 2026-11-02 (ET)
+multisig 9nebqfSd37E3YyodB6iEMz18JjWP3QoydporvedkjDw2 vault 2jBifstNwqWdrswEy8chotmVJcwfMRZkV7miqjR86qdx threshold 2/3
+SIG multisigCreateV2 (2-of-3): g2VVwSBxLqqq3cS3XAkFLccJ7FGzuaaULmXySCBua15QFFU3fU6nAGEKQoWiK78mMwVfKroU6WbxJKfta2rmaK3
+SIG propose_admin(deployer -> vault): 2uRHRoQdFdVoxECyHpwBrNdVy7nGTAANYtCJ4sH2Y4MyABxaz6vgHzq12uwrFzVj6AYP5twxkbbYHfbsU5pBmz8M
+SIG accept_admin: vault tx #1 create: Tw6rrM3iKQhxC1qrKBs6ufsMsXSZcAUAgb9yM2SwUWbW8DBgfibzU37TLKKNsFkcpRNbnrd77V3qoJAmTYS8seG
+SIG accept_admin: proposal create: 3k4fCrLuCNMqEWKuaGap7N4i3widYL7HE1UCfXJWGSSn6TzN9QqDsNS3tkYZpvG8NFKQXpBw9UwYJnj6S2z1LVpX
+SIG accept_admin: approve (deployer): 5MDy6ooA9twGsEGiLoBeL7rPpoza4ysMSL1Gzyd4ykmRAu7KDK22oqL8ysWDgX2SMU4wvJybDXjkso1pN5xeoa17
+PASS accept_admin: execute with 1/2 approvals rejected (Invalid proposal status)
+SIG accept_admin: approve (member3): 5MqUwC6LDaCQvGj8jC1kYuXcTZ8Kr94GE5nRZkACq8PjU3CooXcjGy45S2L5LT4PgMgW2Wk2u6m9sWpfho9qw7wA
+SIG accept_admin: execute: 3hfptzArs17eEXcQRYoiM4NdiBnayyNzhZRydTmbzuNAmWdyfYoasPtyQJwo9d193beEAxsTcq7368vPG2CrQr4v
+SIG set_paused(1): vault tx #2 create: Y1BK4cs94oKSA44aYTDMsKMpWKXh5FeBUo2qSpzP5W9re1qmpdvBN8mG4pbKHDcncJw8MUMUKWD35YCDQTdZLK7
+SIG set_paused(1): proposal create: Gg44q1wZwJHUtcv96Npub5XAZ98z7qxjpyUXp1c9JEEv9gXKJnuJV8LpJvNchbSFPTBhoS8zncoSmtcVs3wudbA
+SIG set_paused(1): approve (deployer): wVmdT4GNBTN7uHYc8kiHLa91cA2DugeNCHR9dNt2e7BifhTdssDnDaWs8osvwjRHk15J8RGKSzKuxgu5AXUpv7q
+SIG set_paused(1): approve (member3): 58wJqKFydWCoNZ82j7YpNmPg8jRU6boyZKPzULVHySPARC6xqWGxKq5ZgyzrD62j2PHadxmjn7SU7gnzH1ZuLs4M
+SIG set_paused(1): execute: 5Ma9rEaGoEcKekCNwmmJhSeB1sVNTc8LV62aNnwDSK4gddWr9PgvWcsTdqFd1oQR28rohTHhn3tKnWSzKvzuHtdQ
+SIG direct pause by old deployer key REJECTED on-chain {"InstructionError":[0,{"Custom":1296171010}]}: 2bn68M3sbDkibgRGgKLYBnAhZQbMJR2CAx3PcKHLSzBc92sb2Dyyf3yKuc5GeutN9Kg7dCNUwgW5CpRchD5yuPpf
+SIG set_paused(0): vault tx #3 create: 3jmyZRTEz9nauWQesJW9F6PSGwg9Em6sE5C5ZCeU9vAqak1DDMB9ENqeVjrYakVFDM2ALa1FhGvYroDSjb44hm5T
+SIG set_paused(0): proposal create: Vpanf7BezwJnvVdgMFohnbeoXoFSxyCw6toeGVfNcLzJSZ9UutyPnBZkoyPmaZez3SLMLd18J4wRUyJDUu4qyhZ
+SIG set_paused(0): approve (deployer): 46RhPjPya8CZ3AyaibNouavgLF4jwoSuqbJoq9cGG9RUL2JgX2CBKQm2RxDpEsSawdSuZUNfKCNT58DUnRvKtMGQ
+SIG set_paused(0): approve (member3): 3KKBNok4QnTjovLYv43KUEmX1GbZWhPmAqEvS1Woj5G4dabq6o74GHGxoAjnzY9JPns77eaQv8TvS4HM4d2VZFhc
+SIG set_paused(0): execute: 2NLvxMjyuKUCyifvzCAv8CHGeTGHPw23MDz2D4ZKr9go11aWbE2K5N4FKwT8mg6PLbP4rgpDzpsrJwdXJJVxsYYg
+SIG set-upgrade-authority 97F68uhs… -> vault (BPFLoaderUpgradeable SetAuthority, slot 517916594): 62uJwroy4pwNkEh6m9XXbZebZBprgfaAf6j4BtPTZoK2tbFwZvryU2LiKe6u5N7C53463GwsGW1hH8zk9Z9nAk4
+VERIFY solana program show: Authority 2jBifstNwqWdrswEy8chotmVJcwfMRZkV7miqjR86qdx
+VERIFY Config: admin 2jBifstN…qdx, pending 0, paused false

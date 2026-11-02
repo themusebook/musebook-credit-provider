@@ -15,7 +15,10 @@ use pinocchio_token::{
     state::{Account, Mint},
 };
 
-use crate::{Authorization, LEDGER_SEED, LOADER, Ledger, ata_address, hook_state, ledger_address};
+use crate::governance::{error, load_config, require_not_paused};
+use crate::{
+    Authorization, LEDGER_SEED, LOADER, Ledger, ata_address, events, hook_state, ledger_address,
+};
 
 fn require(condition: bool) -> ProgramResult {
     if condition {
@@ -52,23 +55,15 @@ fn store(account: &mut AccountView, ledger: &Ledger) -> ProgramResult {
         .map_err(|_| ProgramError::InvalidAccountData)
 }
 
-/// Verify the issuer against loader-owned executable/ProgramData state.
-/// An arbitrary first caller cannot nominate themselves as the provider.
-pub fn initialize(program: &Address, accounts: &mut [AccountView]) -> ProgramResult {
-    let [
-        owner,
-        ledger,
-        mint,
-        executable,
-        program_data,
-        issuer,
-        system,
-    ] = accounts
-    else {
-        return Err(ProgramError::NotEnoughAccountKeys);
-    };
-    require(owner.is_signer() && owner.is_writable() && issuer.is_signer())?;
-    require(*system.address() == pinocchio_system::ID && system.executable())?;
+/// The signer must be the program's current upgrade authority, read from
+/// loader-owned Program/ProgramData state.
+pub(crate) fn verify_upgrade_authority(
+    program: &Address,
+    executable: &AccountView,
+    program_data: &AccountView,
+    issuer: &AccountView,
+) -> ProgramResult {
+    require(issuer.is_signer())?;
     require(
         executable.address() == program
             && executable.executable()
@@ -92,6 +87,27 @@ pub fn initialize(program: &Address, accounts: &mut [AccountView]) -> ProgramRes
     )?;
     drop(pd);
     drop(program_bytes);
+    Ok(())
+}
+
+/// Verify the issuer against loader-owned executable/ProgramData state.
+/// An arbitrary first caller cannot nominate themselves as the provider.
+pub fn initialize(program: &Address, accounts: &mut [AccountView]) -> ProgramResult {
+    let [
+        owner,
+        ledger,
+        mint,
+        executable,
+        program_data,
+        issuer,
+        system,
+    ] = accounts
+    else {
+        return Err(ProgramError::NotEnoughAccountKeys);
+    };
+    require(owner.is_signer() && owner.is_writable() && issuer.is_signer())?;
+    require(*system.address() == pinocchio_system::ID && system.executable())?;
+    verify_upgrade_authority(program, executable, program_data, issuer)?;
     let mint_state = Mint::from_account_view(mint)?;
     require(mint_state.is_initialized())?;
     drop(mint_state);
@@ -190,9 +206,10 @@ fn owner_signed(owner: &AccountView, ledger: &Ledger) -> ProgramResult {
 
 /// Issue credits only after an actual owner-authorized transfer into custody.
 pub fn deposit(program: &Address, accounts: &mut [AccountView], amount: u64) -> ProgramResult {
-    let [owner, ledger_account, vault, payer, token] = accounts else {
+    let [owner, ledger_account, vault, payer, token, config] = accounts else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
+    require_not_paused(&load_config(program, config)?)?;
     let mut ledger = load(program, ledger_account)?;
     owner_signed(owner, &ledger)?;
     custody(ledger_account, &ledger, vault, payer, token)?;
@@ -206,7 +223,16 @@ pub fn deposit(program: &Address, accounts: &mut [AccountView], amount: u64) -> 
     require(Account::from_account_view(vault)?.amount() == expected)?;
     ledger.credits = credits;
     ledger.busy = false;
-    store(ledger_account, &ledger)
+    store(ledger_account, &ledger)?;
+    events::emit(
+        events::DEPOSITED,
+        &[
+            ledger_account.address().as_ref(),
+            &amount.to_le_bytes(),
+            &credits.to_le_bytes(),
+        ],
+    );
+    Ok(())
 }
 
 /// Bind the issuer's policy and the owner's consent to one channel incarnation.
@@ -215,10 +241,14 @@ pub fn authorize(
     accounts: &mut [AccountView],
     authorization: Authorization,
 ) -> ProgramResult {
-    let [owner, issuer, ledger_account, vault, payer, token] = accounts else {
+    let [owner, issuer, ledger_account, vault, payer, token, config] = accounts else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
+    require_not_paused(&load_config(program, config)?)?;
     let mut ledger = load(program, ledger_account)?;
+    if ledger.suspended {
+        return Err(ProgramError::Custom(error::SUSPENDED));
+    }
     owner_signed(owner, &ledger)?;
     require(issuer.is_signer() && issuer.address().as_array() == &ledger.issuer)?;
     custody(ledger_account, &ledger, vault, payer, token)?;
@@ -240,7 +270,7 @@ pub fn authorize(
     drop(p);
     let mint = Address::new_from_array(ledger.mint);
     ledger.channel = *channel_address(
-        &payment_channel_interface::ID,
+        &crate::CHANNEL_PROGRAM,
         owner.address(),
         &Address::new_from_array(authorization.payee),
         &mint,
@@ -256,7 +286,18 @@ pub fn authorize(
     ledger.funded = 0;
     ledger.refunded = 0;
     ledger.last_sequence = 0;
-    store(ledger_account, &ledger)
+    store(ledger_account, &ledger)?;
+    events::emit(
+        events::AUTHORIZED,
+        &[
+            ledger_account.address().as_ref(),
+            &ledger.channel,
+            &authorization.cap.to_le_bytes(),
+            &authorization.nonce.to_le_bytes(),
+            &authorization.expires_at_slot.to_le_bytes(),
+        ],
+    );
+    Ok(())
 }
 
 pub fn callback(program: &Address, accounts: &mut [AccountView], data: &[u8]) -> ProgramResult {
@@ -272,7 +313,7 @@ pub fn callback(program: &Address, accounts: &mut [AccountView], data: &[u8]) ->
         accounts,
         data,
         &CallbackExpectations {
-            channel_program: &payment_channel_interface::ID,
+            channel_program: &crate::CHANNEL_PROGRAM,
             callback_program: program,
             channel: &Address::new_from_array(ledger.channel),
             token_program: &pinocchio_token::ID,
@@ -337,7 +378,12 @@ pub fn cancel_unfunded(program: &Address, accounts: &mut [AccountView]) -> Progr
     owner_signed(owner, &ledger)?;
     require(issuer.is_signer() && issuer.address().as_array() == &ledger.issuer)?;
     cancel_unfunded_state(&mut ledger)?;
-    store(ledger_account, &ledger)
+    store(ledger_account, &ledger)?;
+    events::emit(
+        events::CANCELED,
+        &[ledger_account.address().as_ref(), &ledger.channel],
+    );
+    Ok(())
 }
 
 fn cancel_unfunded_state(ledger: &mut Ledger) -> ProgramResult {
@@ -398,6 +444,9 @@ pub fn pre_fund(
     status: ChannelStatus,
     deposit: u64,
 ) -> ProgramResult {
+    if ledger.suspended {
+        return Err(ProgramError::Custom(error::SUSPENDED));
+    }
     require(
         c.executed == 0
             && status == ChannelStatus::Open
@@ -455,7 +504,16 @@ pub fn pre_fund(
             && Account::from_account_view(payer)?.amount() == payer_after,
     )?;
     ledger.busy = false;
-    store(ledger_account, ledger)
+    store(ledger_account, ledger)?;
+    events::emit(
+        events::PRE_FUND,
+        &[
+            &ledger.channel,
+            &c.funding_requested.to_le_bytes(),
+            &c.sequence.to_le_bytes(),
+        ],
+    );
+    Ok(())
 }
 
 /// Restore credits only after the actual refund has returned to provider custody.
@@ -523,7 +581,17 @@ pub fn post_distribute(
         ledger.active = false;
     }
     ledger.busy = false;
-    store(ledger_account, ledger)
+    store(ledger_account, ledger)?;
+    events::emit(
+        events::POST_DISTRIBUTE,
+        &[
+            &ledger.channel,
+            &amount.to_le_bytes(),
+            &c.sequence.to_le_bytes(),
+            &[terminal as u8],
+        ],
+    );
+    Ok(())
 }
 
 #[cfg(test)]
