@@ -29,7 +29,7 @@ jobs:
         run: cargo install solana-verify --version "$SOLANA_VERIFY_VERSION" --locked
       - name: solana-verify build (devnet flavor, SBPF v3, platform-tools v1.58)
         run: |
-          solana-verify build . \
+          solana-verify build "$GITHUB_WORKSPACE" \
             --workspace-path programs/musebook-credit-provider \
             --library-name musebook_credit_provider \
             --base-image "$BASE_IMAGE" \
