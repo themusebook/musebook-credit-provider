@@ -35,7 +35,7 @@ Program `SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf` (same ID on devnet and mai
 
 The program has no Squads-specific code. Any signer works, and that is intentional.
 
-**Devnet stand-in:** the devnet deployment uses one throwaway key as upgrade authority and admin. It is not a multisig. Do not read devnet governance as production custody.
+**Devnet (done 2026-11-02):** program `97F68uhs…` is now governed by Squads v4 multisig `9nebqfSd37E3YyodB6iEMz18JjWP3QoydporvedkjDw2`, a 2-of-3. Its vault `2jBifstNwqWdrswEy8chotmVJcwfMRZkV7miqjR86qdx` holds both admin and upgrade authority. Steps 3 to 6 above were run by `scripts/squads-devnet/run.js`. Signatures are in docs/DEVNET.md. Pause and unpause were executed as vault transactions, and a direct pause by the old deployer key failed with UNAUTHORIZED. Two of the three devnet member keys live on one box, so this proves the mechanics, not key separation. Mainnet members must be hardware wallets you choose.
 
 ## Caveat: issuer == upgrade authority at ledger init
 `initialize` (ledger) still requires the issuer to equal the *current upgrade authority* (upstream design). Once the upgrade authority moves to a multisig, every new ledger needs a multisig signature. Before mainnet, decide between two options: keep that (slow but strict), or add a `Config.issuer` that the admin sets, and check against it instead. Tracked in AUDIT_READINESS.md.

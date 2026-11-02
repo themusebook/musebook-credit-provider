@@ -2,6 +2,7 @@
 
 ## Ready
 - Scope is frozen per commit. Small program (~1.1k LoC Rust, Pinocchio, no_std). The diff against upstream `payment-channels@23193ab examples/credit-provider` is readable (seed, entrypoint, governance, events, ledger `suspended`).
+- Squads v4 2-of-3 vault is admin and upgrade authority on devnet, with pause and unpause proven through vault transactions.
 - Governance: config PDA, admin (multisig-capable), two-step handover, global pause, per-ledger suspension, `sol_log_data` events.
 - Devnet deployment `97F68uhs…` (slot 517910524) whose on-chain ELF matches the verifiable build hash, plus a full hook e2e on devnet (62 PASS, docs/DEVNET.md).
 - Tests: host unit tests (7 + 3 interface), LiteSVM SBF governance tests (4), Surfpool real-SBF e2e (61 PASS) covering fund/topUp/seal/distribute/refund/withdraw/cancel/expiry/replay/cap/rollback plus pause/suspend.

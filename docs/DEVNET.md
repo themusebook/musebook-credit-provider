@@ -1,7 +1,7 @@
 # Devnet deployment
 
 > **Status (2026-11-02, ET): DEPLOYED on devnet. Full hook e2e passed (62 PASS, 44 confirmed signatures).**
-> Devnet only. Pre-audit. The upgrade authority and admin are a single throwaway key (**stand-in, not a multisig**).
+> Devnet only. Pre-audit. The upgrade authority and admin are now a **Squads v4 2-of-3 vault** (see below).
 
 ## Deployment
 | Item | Value |
@@ -10,7 +10,7 @@
 | ProgramData | `4cR7uYdQEw3QcxzbBpVFannRLZdpgqpvhkiPUV7zNo9k` (max-len 96,000 B, rent 0.48855884 SOL) |
 | Deploy slot | **517910524** |
 | Deploy signature | [`3NcFQoDxDcoMtDWWoLP37kW1nTMoQwnska9KeuyNLUp8ExgKwEkfe1ZnpAQo72qtNstyepYkALZM6GXs2JNSs7XX`](https://explorer.solana.com/tx/3NcFQoDxDcoMtDWWoLP37kW1nTMoQwnska9KeuyNLUp8ExgKwEkfe1ZnpAQo72qtNstyepYkALZM6GXs2JNSs7XX?cluster=devnet) |
-| Upgrade authority = issuer = admin (stand-in) | `BcevhuQmZd4zN56tx988MRbmaGu6n1tU7UWrwkwgVata` |
+| Upgrade authority = issuer = admin | **Now the Squads v4 vault `2jBifstNwqWdrswEy8chotmVJcwfMRZkV7miqjR86qdx` (2-of-3)**. Originally the deployer `BcevhuQmZd4zN56tx988MRbmaGu6n1tU7UWrwkwgVata`; see the Squads section. |
 | Config PDA init | [`3hFADYYwjshECgytsxTv77gNzq6RySSqaYNRs87ArEonVt3k3YnZvFwqo3ZnrqvmLzbgJoaRaRd2ufu8pQkvZRAi`](https://explorer.solana.com/tx/3hFADYYwjshECgytsxTv77gNzq6RySSqaYNRs87ArEonVt3k3YnZvFwqo3ZnrqvmLzbgJoaRaRd2ufu8pQkvZRAi?cluster=devnet) |
 | Channel program (hooks) | `CHNLxBtXw7VPqd5GMcbtVoEbn4ehyaSoiHj56Ao5sWkJ` (`devnet-deployment`) |
 | Build | `scripts/build-verifiable.sh devnet` sha256 `26c03af611e6cb2965181c9ad258dce2d2b0aa4dfef28438c118110c6a36e32f` |
@@ -77,5 +77,35 @@ Full log: `evidence/devnet-run-2026-11-02.txt` (each line has the full signature
 ## Not covered / caveats
 - pay-kit / pay don't emit `*WithHooks` instructions yet. The harness builds channel instructions directly, so no pay-kit client or merchant was involved.
 - `CHNLxBt…` is not byte-verified against `23193ab` (dump `3e94032d…` vs local `538e8b3f…`), but the hook ABI behaved as `23193ab` across every case.
-- The admin is a single key, not Squads. No containerized `solana-verify` hash yet (no Docker).
+- E2E ran while the deployer was still admin. Governance then moved to Squads (below). No containerized `solana-verify` hash yet (no Docker).
 - Leftover SOL in ephemeral test owner keys is not recovered (about 0.1 SOL per run).
+
+## Squads v4 governance on devnet (2026-11-02, ET)
+| Item | Value |
+|---|---|
+| Squads v4 program | `SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf` |
+| Multisig | [`9nebqfSd37E3YyodB6iEMz18JjWP3QoydporvedkjDw2`](https://explorer.solana.com/address/9nebqfSd37E3YyodB6iEMz18JjWP3QoydporvedkjDw2?cluster=devnet) |
+| Vault PDA (index 0) = **program admin + upgrade authority** | [`2jBifstNwqWdrswEy8chotmVJcwfMRZkV7miqjR86qdx`](https://explorer.solana.com/address/2jBifstNwqWdrswEy8chotmVJcwfMRZkV7miqjR86qdx?cluster=devnet) |
+| Threshold | **2 of 3**, time lock 0, config authority none (autonomous), all members with full permissions |
+| Members | `BcevhuQmZd4zN56tx988MRbmaGu6n1tU7UWrwkwgVata` (deployer) · `2GTTWuJspGVmMF9iUzBxxiHgh921zom5sJMpqecUkDG5` (user's devnet wallet; pubkey only) · `CFsfxsmtSfWTwGhVnCyFwA1AjM3Ld6yQKPZukvVuSyCw` (throwaway, box-held) |
+| Script | `scripts/squads-devnet/run.js` (`@sqds/multisig` 2.x). Idempotent; logs pubkeys and signatures only. |
+
+| Step | Signature |
+|---|---|
+| multisigCreateV2 (2-of-3) | `g2VVwSBxLqqq3cS3XAkFLccJ7FGzuaaULmXySCBua15QFFU3fU6nAGEKQoWiK78mMwVfKroU6WbxJKfta2rmaK3` |
+| propose_admin(deployer → vault), direct | `2uRHRoQdFdVoxECyHpwBrNdVy7nGTAANYtCJ4sH2Y4MyABxaz6vgHzq12uwrFzVj6AYP5twxkbbYHfbsU5pBmz8M` |
+| accept_admin vault tx #1: create / proposal / approve deployer | `Tw6rrM3iKQhxC1qrKBs6ufsMsXSZcAUAgb9yM2SwUWbW8DBgfibzU37TLKKNsFkcpRNbnrd77V3qoJAmTYS8seG` / `3k4fCrLuCNMqEWKuaGap7N4i3widYL7HE1UCfXJWGSSn6TzN9QqDsNS3tkYZpvG8NFKQXpBw9UwYJnj6S2z1LVpX` / `5MDy6ooA9twGsEGiLoBeL7rPpoza4ysMSL1Gzyd4ykmRAu7KDK22oqL8ysWDgX2SMU4wvJybDXjkso1pN5xeoa17` |
+| Execute with 1/2 approvals | **rejected** client-side by Squads ("Invalid proposal status"; proposal not yet Approved) |
+| accept_admin: approve member3 / **execute** | `5MqUwC6LDaCQvGj8jC1kYuXcTZ8Kr94GE5nRZkACq8PjU3CooXcjGy45S2L5LT4PgMgW2Wk2u6m9sWpfho9qw7wA` / `3hfptzArs17eEXcQRYoiM4NdiBnayyNzhZRydTmbzuNAmWdyfYoasPtyQJwo9d193beEAxsTcq7368vPG2CrQr4v` |
+| set-upgrade-authority → vault (slot 517916594) | `62uJwroy4pwNkEh6m9XXbZebZBprgfaAf6j4BtPTZoK2tbFwZvryU2LiKe6u5N7C53463GwsGW1hH8zk9Z9nAk4` |
+| set_paused(1) vault tx #2: create / proposal / approve ×2 / **execute** | `Y1BK4cs94oKSA44aYTDMsKMpWKXh5FeBUo2qSpzP5W9re1qmpdvBN8mG4pbKHDcncJw8MUMUKWD35YCDQTdZLK7` / `Gg44q1wZwJHUtcv96Npub5XAZ98z7qxjpyUXp1c9JEEv9gXKJnuJV8LpJvNchbSFPTBhoS8zncoSmtcVs3wudbA` / `wVmdT4GNBTN7uHYc8kiHLa91cA2DugeNCHR9dNt2e7BifhTdssDnDaWs8osvwjRHk15J8RGKSzKuxgu5AXUpv7q`, `58wJqKFydWCoNZ82j7YpNmPg8jRU6boyZKPzULVHySPARC6xqWGxKq5ZgyzrD62j2PHadxmjn7SU7gnzH1ZuLs4M` / `5Ma9rEaGoEcKekCNwmmJhSeB1sVNTc8LV62aNnwDSK4gddWr9PgvWcsTdqFd1oQR28rohTHhn3tKnWSzKvzuHtdQ` |
+| **Direct set_paused by old deployer key: failed on-chain** with `Custom(0x4d420002)` UNAUTHORIZED | `2bn68M3sbDkibgRGgKLYBnAhZQbMJR2CAx3PcKHLSzBc92sb2Dyyf3yKuc5GeutN9Kg7dCNUwgW5CpRchD5yuPpf` |
+| set_paused(0) vault tx #3: create / proposal / approve ×2 / **execute** | `3jmyZRTEz9nauWQesJW9F6PSGwg9Em6sE5C5ZCeU9vAqak1DDMB9ENqeVjrYakVFDM2ALa1FhGvYroDSjb44hm5T` / `Vpanf7BezwJnvVdgMFohnbeoXoFSxyCw6toeGVfNcLzJSZ9UutyPnBZkoyPmaZez3SLMLd18J4wRUyJDUu4qyhZ` / `46RhPjPya8CZ3AyaibNouavgLF4jwoSuqbJoq9cGG9RUL2JgX2CBKQm2RxDpEsSawdSuZUNfKCNT58DUnRvKtMGQ`, `3KKBNok4QnTjovLYv43KUEmX1GbZWhPmAqEvS1Woj5G4dabq6o74GHGxoAjnzY9JPns77eaQv8TvS4HM4d2VZFhc` / `2NLvxMjyuKUCyifvzCAv8CHGeTGHPw23MDz2D4ZKr9go11aWbE2K5N4FKwT8mg6PLbP4rgpDzpsrJwdXJJVxsYYg` |
+
+Final state, verified: `solana program show` authority = vault. Config: admin = vault, pending = 0, paused = false. Cost: 0.01450664 SOL from the deployer, including the authority change.
+
+Consequences and caveats:
+- The deployer key is now an ordinary member. It can no longer upgrade the program or pause it on its own.
+- **Ledger `initialize` requires the issuer to equal the upgrade authority**, which is now the vault. So new ledgers need a Squads vault transaction as the issuer co-signer. `e2e/run-devnet.sh` in its current form (deployer as issuer) **no longer works** against this deployment. A rerun needs a fresh devnet program, or the planned `Config.issuer` split.
+- On devnet, two of the three member keys sit on the same box (deployer and throwaway). That proves the mechanics only, not key separation. **Mainnet needs members you choose, ideally hardware wallets on separate devices**, plus a reviewed threshold and time lock. A config authority of none means membership changes need a multisig config transaction.
+- The program has no Squads-specific code. The vault simply signs through `vault_transaction_execute`.
