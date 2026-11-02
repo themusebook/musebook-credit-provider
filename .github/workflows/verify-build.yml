@@ -35,7 +35,7 @@ jobs:
             --base-image "$BASE_IMAGE" \
             --arch v3 \
             --cargo-build-sbf-args="--tools-version v1.58" \
-            -- --features devnet-deployment --locked
+            -- --features devnet-deployment
       - name: Hashes
         id: hash
         run: |
