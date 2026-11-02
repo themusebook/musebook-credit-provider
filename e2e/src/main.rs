@@ -113,6 +113,67 @@ fn fund(rpc: &Rpc, to: Pubkey, surfpool_lamports: u64, devnet_lamports: u64) {
     }
 }
 
+/// Devnet throwaway wallets funded from the deployer. `Sweep` returns their
+/// SOL to the deployer when `main` exits, panics included. Keys never printed.
+static FUNDED: std::sync::Mutex<Vec<[u8; 64]>> = std::sync::Mutex::new(Vec::new());
+fn track(kp: &Keypair) {
+    if DEVNET {
+        FUNDED.lock().unwrap_or_else(|e| e.into_inner()).push(kp.to_bytes());
+    }
+}
+struct Sweep;
+impl Drop for Sweep {
+    fn drop(&mut self) {
+        if !DEVNET {
+            return;
+        }
+        let keys = std::mem::take(&mut *FUNDED.lock().unwrap_or_else(|e| e.into_inner()));
+        if keys.is_empty() {
+            return;
+        }
+        // Fresh thread so a panic here (or a poisoned state) can't abort the unwind.
+        let _ = std::thread::spawn(move || {
+            let rpc = Rpc::new();
+            for bytes in keys {
+                let kp = Keypair::try_from(&bytes[..]).unwrap();
+                for _ in 0..3 {
+                    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        let bal = rpc
+                            .call("getBalance", json!([kp.pubkey().to_string(), {"commitment":"confirmed"}]))["value"]
+                            .as_u64()
+                            .unwrap_or(0);
+                        if bal <= 5_000 {
+                            return Ok(None);
+                        }
+                        let mut data = 2u32.to_le_bytes().to_vec();
+                        data.extend((bal - 5_000).to_le_bytes());
+                        rpc.send(
+                            "sweep to devnet deployer",
+                            &[Instruction {
+                                program_id: system(),
+                                accounts: vec![signer(kp.pubkey(), true), AccountMeta::new(funder().pubkey(), false)],
+                                data,
+                            }],
+                            &kp,
+                            &[&kp],
+                        )
+                        .map(|sig| Some((bal - 5_000, sig)))
+                    }));
+                    match r {
+                        Ok(Ok(Some((lamports, sig)))) => {
+                            println!("SWEEP {} lamports -> deployer: {sig}", lamports);
+                            break;
+                        }
+                        Ok(Ok(None)) => break,
+                        _ => std::thread::sleep(std::time::Duration::from_secs(2)),
+                    }
+                }
+            }
+        })
+        .join();
+    }
+}
+
 struct Rpc(String);
 impl Rpc {
     fn new() -> Self {
@@ -411,6 +472,7 @@ impl<'a> Fixture<'a> {
         let owner = Keypair::new();
         let payee = Keypair::new();
         let mint = Keypair::new();
+        track(&owner);
         fund(rpc, owner.pubkey(), 10_000_000_000, 120_000_000);
         let ledger = key(musebook_credit_provider::ledger_address(
             &address(provider),
@@ -1004,6 +1066,8 @@ fn init_config(rpc: &Rpc, issuer: &Keypair, id: Pubkey) {
 }
 
 fn main() {
+    // Declared first so it drops last: always return devnet SOL, even on panic.
+    let _sweep = Sweep;
     let rpc = Rpc::new();
     let (admin, issuer, provider) = if DEVNET {
         devnet_setup(&rpc)

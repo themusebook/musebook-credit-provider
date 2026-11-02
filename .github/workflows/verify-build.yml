@@ -1,0 +1,69 @@
+name: solana-verify build
+# Reproducible Docker build with solana-verify, compared against the native
+# verifiable build and the program deployed on devnet. Read-only: no keys, no
+# uploads to chain.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  SOLANA_VERIFY_VERSION: 0.5.2
+  # Agave 3.1.14 verifiable-build image, pinned by digest.
+  BASE_IMAGE: solanafoundation/solana-verifiable-build:3.1.14@sha256:f6b78c98ddb1774af9cf1b5ca00ccff4dac002eded106b4d44560c2c6be4188d
+  DEVNET_PROGRAM: 97F68uhs5fmvddJxH1LrKytbBXrhx6ZBZwuZAdUdP7QA
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-targets: false
+      - name: Install solana-verify ${{ env.SOLANA_VERIFY_VERSION }}
+        run: cargo install solana-verify --version "$SOLANA_VERIFY_VERSION" --locked
+      - name: solana-verify build (devnet flavor, SBPF v3, platform-tools v1.58)
+        run: |
+          solana-verify build . \
+            --workspace-path programs/musebook-credit-provider \
+            --library-name musebook_credit_provider \
+            --base-image "$BASE_IMAGE" \
+            --arch v3 \
+            --cargo-build-sbf-args="--tools-version v1.58" \
+            -- --features devnet-deployment --locked
+      - name: Hashes
+        id: hash
+        run: |
+          so=$(find . -path '*/target/deploy/musebook_credit_provider.so' -print -quit)
+          test -n "$so"
+          docker_hash=$(solana-verify get-executable-hash "$so")
+          chain_hash=$(solana-verify get-program-hash -u https://api.devnet.solana.com "$DEVNET_PROGRAM")
+          echo "docker=$docker_hash" >> "$GITHUB_OUTPUT"
+          echo "chain=$chain_hash" >> "$GITHUB_OUTPUT"
+          {
+            echo "### solana-verify"
+            echo "| build | executable hash |"
+            echo "|---|---|"
+            echo "| solana-verify Docker (devnet flavor) | \`$docker_hash\` |"
+            echo "| deployed devnet \`$DEVNET_PROGRAM\` | \`$chain_hash\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          sha256sum "$so"
+      - name: Compare with the deployed devnet program
+        run: |
+          if [ "${{ steps.hash.outputs.docker }}" = "${{ steps.hash.outputs.chain }}" ]; then
+            echo "solana-verify build matches the deployed devnet program"
+          else
+            # The deployed binary was built natively (scripts/build-verifiable.sh);
+            # until the next upgrade ships the Docker artifact this is reported,
+            # not enforced.
+            echo "::warning::solana-verify hash differs from the deployed devnet program"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: musebook_credit_provider-devnet-solana-verify
+          path: '**/target/deploy/musebook_credit_provider.so'
