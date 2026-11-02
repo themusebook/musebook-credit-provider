@@ -3,8 +3,8 @@
 API credit provider for [musebook.trade](https://musebook.trade), built for Pay's
 credit-provider model (preFund / postDistribute hooks on payment-channel V2).
 
-> **Status: pre-audit test code. Not deployed** (devnet deploy prepared, blocked on
-> faucet SOL; see docs/DEVNET.md). No mainnet program exists. This is not a security certification and not an endorsement.
+> **Status: pre-audit. Deployed on devnet only** as `97F68uhs5fmvddJxH1LrKytbBXrhx6ZBZwuZAdUdP7QA`
+> (docs/DEVNET.md). No mainnet program exists. This is not a security certification and not an endorsement.
 > Pay and pay-kit don't emit `*WithHooks` channel instructions yet, so the
 > `musebook` provider name stays **unavailable** in both of them.
 

@@ -6,6 +6,9 @@ publish = false
 
 [workspace]
 
+[features]
+devnet = ["payment_channels/devnet", "payment_channels/devnet-deployment", "musebook_credit_provider/devnet-deployment"]
+
 [dependencies]
 musebook_credit_provider = { path = "../programs/musebook-credit-provider", features = ["client"] }
 payment_channels = { path = "../vendor/payment-channels/program/payment_channels", features = ["no-entrypoint"] }

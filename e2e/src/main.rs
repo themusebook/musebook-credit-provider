@@ -77,11 +77,52 @@ fn event_authority() -> Pubkey {
     .0
 }
 
+const DEVNET: bool = cfg!(feature = "devnet");
+const DEVNET_RPC: &str = "https://api.devnet.solana.com";
+/// Confirmation polls of 100 ms; devnet needs longer than Surfpool.
+const POLLS: usize = if DEVNET { 600 } else { 100 };
+
+/// Devnet funder: the deployer key (path in CREDIT_E2E_PAYER). Never printed.
+static FUNDER: std::sync::OnceLock<Keypair> = std::sync::OnceLock::new();
+fn funder() -> &'static Keypair {
+    FUNDER.get_or_init(|| {
+        let path = std::env::var("CREDIT_E2E_PAYER").expect("CREDIT_E2E_PAYER");
+        let bytes: Vec<u8> = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        Keypair::try_from(&bytes[..]).unwrap()
+    })
+}
+
+/// Surfpool: airdrop. Devnet: system transfer from the deployer (no faucet).
+fn fund(rpc: &Rpc, to: Pubkey, surfpool_lamports: u64, devnet_lamports: u64) {
+    if DEVNET {
+        let mut data = 2u32.to_le_bytes().to_vec();
+        data.extend(devnet_lamports.to_le_bytes());
+        rpc.send(
+            "fund from devnet deployer",
+            &[Instruction {
+                program_id: system(),
+                accounts: vec![signer(funder().pubkey(), true), AccountMeta::new(to, false)],
+                data,
+            }],
+            funder(),
+            &[funder()],
+        )
+        .unwrap();
+    } else {
+        rpc.call("requestAirdrop", json!([to.to_string(), surfpool_lamports]));
+    }
+}
+
 struct Rpc(String);
 impl Rpc {
     fn new() -> Self {
-        let endpoint = std::env::var("CREDIT_E2E_RPC")
-            .expect("run via scripts/test-credit-provider-surfpool.sh");
+        let endpoint =
+            std::env::var("CREDIT_E2E_RPC").expect("run via e2e/run.sh or e2e/run-devnet.sh");
+        if DEVNET {
+            // Devnet mode: exactly the public devnet endpoint, nothing else.
+            assert_eq!(endpoint, DEVNET_RPC, "devnet mode only talks to devnet");
+            return Self(endpoint);
+        }
         let port = endpoint
             .strip_prefix("http://127.0.0.1:")
             .expect("loopback only");
@@ -185,7 +226,7 @@ impl Rpc {
         // Submit even expected failures: rollback assertions inspect committed
         // ledger state after a real rejected transaction, not just simulation.
         let signature = self.call("sendTransaction", json!([STANDARD.encode(&wire), {"encoding":"base64","skipPreflight":true,"preflightCommitment":"confirmed"}])).as_str().unwrap().to_owned();
-        for _ in 0..100 {
+        for _ in 0..POLLS {
             let status = self.call(
                 "getSignatureStatuses",
                 json!([[signature], {"searchTransactionHistory":true}]),
@@ -344,10 +385,7 @@ impl<'a> Fixture<'a> {
         let owner = Keypair::new();
         let payee = Keypair::new();
         let mint = Keypair::new();
-        rpc.call(
-            "requestAirdrop",
-            json!([owner.pubkey().to_string(), 10_000_000_000u64]),
-        );
+        fund(rpc, owner.pubkey(), 10_000_000_000, 120_000_000);
         let ledger = key(musebook_credit_provider::ledger_address(
             &address(provider),
             &address(owner.pubkey()),
@@ -830,8 +868,7 @@ impl<'a> Fixture<'a> {
     }
 }
 
-fn main() {
-    let rpc = Rpc::new();
+fn surfpool_setup(rpc: &Rpc) -> (Keypair, Pubkey) {
     let dir = PathBuf::from(std::env::var_os("CREDIT_E2E_RUN_DIR").unwrap());
     let issuer = Keypair::new();
     let provider = Keypair::new();
@@ -847,10 +884,6 @@ fn main() {
         json!([channel_program().to_string(), hex::encode(channel_bytes), 0]),
     );
     assert_eq!(rpc.account(channel_program())["executable"], true);
-    assert_eq!(
-        rpc.account(channel_program())["owner"],
-        musebook_credit_provider::LOADER.to_string()
-    );
     rpc.call(
         "requestAirdrop",
         json!([issuer.pubkey().to_string(), 100_000_000_000u64]),
@@ -888,18 +921,58 @@ fn main() {
         rpc.account(provider.pubkey())["owner"],
         musebook_credit_provider::LOADER.to_string()
     );
-    let program = address(provider.pubkey());
+    let id = provider.pubkey();
+    init_config(rpc, &issuer, id);
+    (issuer, id)
+}
+
+/// Devnet: the program is already deployed by scripts/devnet-deploy.sh; the
+/// deployer is the upgrade authority, issuer and (stand-in) admin.
+fn devnet_setup(rpc: &Rpc) -> (Keypair, Pubkey) {
+    let id: Pubkey = std::env::var("CREDIT_E2E_PROGRAM")
+        .expect("CREDIT_E2E_PROGRAM")
+        .parse()
+        .unwrap();
+    assert_eq!(
+        rpc.account(channel_program())["executable"],
+        true,
+        "devnet channel program"
+    );
+    assert_eq!(rpc.account(id)["executable"], true, "provider deployed");
+    let issuer = funder().insecure_clone();
+    let config = key(musebook_credit_provider::config_address(&address(id)).0);
+    if rpc.account(config).is_null() {
+        init_config(rpc, &issuer, id);
+    } else {
+        println!("config already initialized: {config}");
+    }
+    (issuer, id)
+}
+
+fn init_config(rpc: &Rpc, issuer: &Keypair, id: Pubkey) {
     let gov = address(issuer.pubkey());
     // Devnet stand-in: the issuer key is both upgrade authority and admin.
     // Production: admin = Squads v4 vault PDA (see docs/GOVERNANCE.md).
     rpc.send(
         "initialize governance config (upgrade-authority gated)",
-        &[client::initialize_config(&program, &gov, &gov, &gov)],
-        &issuer,
-        &[&issuer],
+        &[client::initialize_config(&address(id), &gov, &gov, &gov)],
+        issuer,
+        &[issuer],
     )
     .unwrap();
-    let mut f = Fixture::new(&rpc, provider.pubkey(), &issuer);
+}
+
+fn main() {
+    let rpc = Rpc::new();
+    let (issuer, provider_id) = if DEVNET {
+        devnet_setup(&rpc)
+    } else {
+        surfpool_setup(&rpc)
+    };
+    let provider = provider_id;
+    let program = address(provider);
+    let gov = address(issuer.pubkey());
+    let mut f = Fixture::new(&rpc, provider, &issuer);
     let paused_err = json!({"InstructionError":[0,{"Custom": musebook_credit_provider::governance_error::PAUSED}]});
     let suspended_err = json!({"InstructionError":[0,{"Custom": musebook_credit_provider::governance_error::SUSPENDED}]});
     let unauthorized_err = json!({"InstructionError":[0,{"Custom": musebook_credit_provider::governance_error::UNAUTHORIZED}]});
@@ -986,6 +1059,49 @@ fn main() {
             &address(f.ledger),
             false,
         )],
+        &issuer,
+        &[&issuer],
+    )
+    .unwrap();
+    // Two-step admin handover to a fresh key and back (Squads vault stand-in).
+    let next = Keypair::new();
+    let n = address(next.pubkey());
+    rpc.send(
+        "admin proposes new admin",
+        &[client::propose_admin(&program, &gov, &n)],
+        &issuer,
+        &[&issuer],
+    )
+    .unwrap();
+    f.rejects_with(
+        "non-pending key cannot accept admin",
+        client::accept_admin(&program, &address(f.owner.pubkey())),
+        false,
+        unauthorized_err.clone(),
+    );
+    rpc.send(
+        "pending admin accepts",
+        &[client::accept_admin(&program, &n)],
+        &issuer,
+        &[&issuer, &next],
+    )
+    .unwrap();
+    f.rejects_with(
+        "old admin can no longer pause",
+        client::set_paused(&program, &gov, true),
+        true,
+        unauthorized_err.clone(),
+    );
+    rpc.send(
+        "new admin proposes handback",
+        &[client::propose_admin(&program, &n, &gov)],
+        &issuer,
+        &[&issuer, &next],
+    )
+    .unwrap();
+    rpc.send(
+        "original admin accepts handback",
+        &[client::accept_admin(&program, &gov)],
         &issuer,
         &[&issuer],
     )
@@ -1084,7 +1200,7 @@ fn main() {
     assert_eq!(f.ledger().refunded, 200);
     assert!(!f.ledger().active);
     f.authorize_for(300, 3, 3, 8);
-    for _ in 0..100 {
+    for _ in 0..POLLS {
         if rpc.slot() > f.auth.expires_at_slot {
             break;
         }
@@ -1110,7 +1226,10 @@ fn main() {
     f.send("fresh nonce after cancellation can fund", f.open(100));
     assert_eq!(f.ledger().credits, 1_000);
     assert_eq!(f.balance(f.vault), 1_000);
-    println!("PASS offline Surfpool backed-credit end-to-end scenarios");
+    println!(
+        "PASS {} backed-credit end-to-end scenarios",
+        if DEVNET { "devnet" } else { "offline Surfpool" }
+    );
 }
 
 #[cfg(test)]

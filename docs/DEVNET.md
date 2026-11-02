@@ -1,32 +1,81 @@
 # Devnet deployment
 
-> **Status (2026-11-02, ET): NOT DEPLOYED. Blocked on devnet SOL.**
-> The devnet RPC faucet answered `410 "The RPC faucet is closed on this cluster. Request test SOL at https://faucet.solana.com"`. `solana airdrop` hit the rate limit on every attempt. faucet.solana.com needs an interactive GitHub sign-in and captcha, so it was not used automatically.
+> **Status (2026-11-02, ET): DEPLOYED on devnet. Full hook e2e passed (62 PASS, 44 confirmed signatures).**
+> Devnet only. Pre-audit. The upgrade authority and admin are a single throwaway key (**stand-in, not a multisig**).
 
-## Prepared deployment
+## Deployment
 | Item | Value |
 |---|---|
-| Cluster | devnet only (`scripts/devnet-deploy.sh` checks genesis `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`) |
-| Planned program ID | `97F68uhs5fmvddJxH1LrKytbBXrhx6ZBZwuZAdUdP7QA` (fresh throwaway keypair, kept off-repo) |
-| Payer / upgrade authority / admin (stand-in, **not a multisig**) | `BcevhuQmZd4zN56tx988MRbmaGu6n1tU7UWrwkwgVata` |
-| Build | `--features devnet-deployment`, sha256 `26c03af611e6cb2965181c9ad258dce2d2b0aa4dfef28438c118110c6a36e32f` |
-| Needed | about 0.7 SOL for an 89 KB program, plus a few txs |
-| Deploy slot / signatures | _pending_ |
+| Program ID | [`97F68uhs5fmvddJxH1LrKytbBXrhx6ZBZwuZAdUdP7QA`](https://explorer.solana.com/address/97F68uhs5fmvddJxH1LrKytbBXrhx6ZBZwuZAdUdP7QA?cluster=devnet) |
+| ProgramData | `4cR7uYdQEw3QcxzbBpVFannRLZdpgqpvhkiPUV7zNo9k` (max-len 96,000 B, rent 0.48855884 SOL) |
+| Deploy slot | **517910524** |
+| Deploy signature | [`3NcFQoDxDcoMtDWWoLP37kW1nTMoQwnska9KeuyNLUp8ExgKwEkfe1ZnpAQo72qtNstyepYkALZM6GXs2JNSs7XX`](https://explorer.solana.com/tx/3NcFQoDxDcoMtDWWoLP37kW1nTMoQwnska9KeuyNLUp8ExgKwEkfe1ZnpAQo72qtNstyepYkALZM6GXs2JNSs7XX?cluster=devnet) |
+| Upgrade authority = issuer = admin (stand-in) | `BcevhuQmZd4zN56tx988MRbmaGu6n1tU7UWrwkwgVata` |
+| Config PDA init | [`3hFADYYwjshECgytsxTv77gNzq6RySSqaYNRs87ArEonVt3k3YnZvFwqo3ZnrqvmLzbgJoaRaRd2ufu8pQkvZRAi`](https://explorer.solana.com/tx/3hFADYYwjshECgytsxTv77gNzq6RySSqaYNRs87ArEonVt3k3YnZvFwqo3ZnrqvmLzbgJoaRaRd2ufu8pQkvZRAi?cluster=devnet) |
+| Channel program (hooks) | `CHNLxBtXw7VPqd5GMcbtVoEbn4ehyaSoiHj56Ao5sWkJ` (`devnet-deployment`) |
+| Build | `scripts/build-verifiable.sh devnet` sha256 `26c03af611e6cb2965181c9ad258dce2d2b0aa4dfef28438c118110c6a36e32f` |
+| On-chain check | `solana program dump` output, first 89,280 bytes: sha256 **`26c03af6…6e32f` (match)**. The remaining 6,720 bytes are zero padding from `--max-len`. |
+| SOL funding | 1.28 devnet SOL from the user (tx `5eK7pEiB…69SJMR`). No faucet was used. |
 
-To unblock: send roughly 2 devnet SOL to `BcevhuQm…Vata` (faucet.solana.com), then run
-`PAYER=… PROGRAM_KEYPAIR=… scripts/devnet-deploy.sh`.
+Deploy notes: a default deploy (max-len 2× = 178,560 B) needs about 0.91 SOL of ProgramData rent plus a 0.45 SOL buffer at the same time (about 1.36 SOL), which is more than 1.28 SOL. With `--max-len 96000` it needed about 0.49 + 0.45 SOL (the buffer is refunded after deploy). Agave CLI 3.1.10 refuses SBPF v3 ELFs locally ("sbpf_version … not enabled"), so `devnet-deploy.sh` uses `SOLANA_CLI` (4.3.2). The first attempt failed before sending any transaction, and no buffer was left behind (`program show --buffers` is empty). Upgrades beyond 96,000 B need `solana program extend`.
 
-## Which payment-channels program devnet hooks need
-Checked on devnet, 2026-11-02:
-| ID | Size | Last deployed slot | Notes |
-|---|---|---|---|
-| `CHNLxYvVA28MJP9PrFuDXccuoGXAx7jBacfLEkahyGsX` (canonical, `payment_channel_interface::ID`) | 66,240 B | 480232051 | Older build, sha256 `acdb3abf…`. Not the `23193ab` V2-hooks artifact (101,312 B). |
-| `CHNLxBtXw7VPqd5GMcbtVoEbn4ehyaSoiHj56Ao5sWkJ` (`devnet-deployment`) | 101,312 B | 511497054 | Same size as our local `23193ab` V2 build. Not byte-identical to our rebuild: dump `3e94032d…` vs local `538e8b3f…`. Authority `4zTeC5mV…`. |
+## E2E against devnet
+`CREDIT_E2E_PAYER=… CREDIT_E2E_PROGRAM=97F68… e2e/run-devnet.sh`. It is the same harness as Surfpool, built with `--features devnet`: channel `CHNLxBt…`, devnet treasury owner, and accounts funded by system transfer from the deployer instead of airdrops. It checks the devnet genesis hash first.
 
-So the provider gained a `devnet-deployment` feature that trusts `CHNLxBt…` callbacks. Whether `CHNLxBt…` exposes the exact `23193ab` hook ABI is **unverified** (question for maintainers).
+Covered for real on devnet: initialize negatives (impostor issuer, missing signature, substituted ProgramData) · governance config init · pause/unpause (non-admin rejected, deposit and authorize blocked while paused) · ledger suspension (`pre_fund` rejects a real channel `open`) · two-step admin handover and back (non-pending accept rejected, old admin rejected) · deposit · authorize · **open with `pre_fund` hook** · cap-overrun rollback · **topUp with hook** · voucher + seal · **distribute with `post_distribute` refund** · duplicate distribute · consumed-nonce replay · withdrawPayer · zero-refund terminal · expiry reject · cancel_unfunded · canceled-nonce replay · fresh nonce.
+Max observed: 165,335 CU (open with `pre_fund`), versus 118,845 on Surfpool.
 
-## End-to-end status
-- **Local Surfpool 1.5.0 (real SBF, real signatures): 55 PASS**, including the new governance cases. See `evidence/surfpool-run-2026-11-02-governance.txt`. The governance cases: init config gated by the upgrade authority, a non-admin pause rejected, pause blocking deposit and authorize, a suspended ledger rejecting `pre_fund` inside a real channel `open`, and unpause or lift restoring the flow.
-- **LiteSVM SBF governance tests: 4/4 pass** (`tests-svm`).
-- **Devnet e2e: not run** (no SOL). Also remaining: the e2e harness is loopback-only and seeds accounts with Surfpool airdrops. A devnet mode has to fund from the payer and point the channel at `CHNLxBt…`.
-- **pay-kit / pay:** they don't emit `*WithHooks` channel instructions yet, so a merchant-driven hook flow can't be exercised through pay-kit on any cluster. The e2e builds the channel instructions directly.
+Full log: `evidence/devnet-run-2026-11-02.txt` (each line has the full signature). Rejected cases submit with `skipPreflight`, fail on-chain, and are verified by error code plus an unchanged account snapshot.
+
+| Step | Signature | CU |
+|---|---|---|
+| initialize governance config (upgrade-authority gated) | [`3hFADYYwjshECgyt…`](https://explorer.solana.com/tx/3hFADYYwjshECgytsxTv77gNzq6RySSqaYNRs87ArEonVt3k3YnZvFwqo3ZnrqvmLzbgJoaRaRd2ufu8pQkvZRAi?cluster=devnet) | 18207 |
+| fund from devnet deployer | [`J7cKhXWHVAgwr7VM…`](https://explorer.solana.com/tx/J7cKhXWHVAgwr7VMcH8VYJokDLKKWYU3qTA4w3qSfroYTxXMgCrLEUVT1DcAmagJumyqx74mpjfNpDLFrNgCQre?cluster=devnet) | 150 |
+| create SPL mint | [`5fEYFdppej41Qsh9…`](https://explorer.solana.com/tx/5fEYFdppej41Qsh9WGPwadn7BCmb7dAHDfXBK7f3ihpBurkHSnH9LbK6dRa2ja3VehmYEUNLTAa34UBztPgCwkGM?cluster=devnet) | 352 |
+| create associated token account | [`3sF8domKwVoTxvav…`](https://explorer.solana.com/tx/3sF8domKwVoTxvavo5x5CkpsDCNXvQA7ArPCRbHUdopApJjFzhBNRK48GBpFPGsmbxF2qw9q4ZPSyBY12FYmbqSo?cluster=devnet) | 22417 |
+| create associated token account | [`5Frvy18c9Ed2G2io…`](https://explorer.solana.com/tx/5Frvy18c9Ed2G2ioui4hTQG9v2eHgjdPEzUMFfBQdjJGpvCGoG1Jztjnpqz4woGjAfNp1hygvXZqSY1HyjBECXaH?cluster=devnet) | 15018 |
+| create associated token account | [`7u3hnaqnHUy5j3eZ…`](https://explorer.solana.com/tx/7u3hnaqnHUy5j3eZV69DCtEcL3P6AecbEtDvyxArkrpsT6JSujcTac6ZeSNA3DUribG8ynyeZGo8WMvwevLUbih?cluster=devnet) | 15018 |
+| create associated token account | [`5uwP6eCGAw53D8Py…`](https://explorer.solana.com/tx/5uwP6eCGAw53D8PyzfK5fRYuUgFswFk88Sqry9ffc8J383Nqqh1GZroMAfnqcaB7Py7vRpHP8uFt5kyNoz332JNS?cluster=devnet) | 15018 |
+| mint backing tokens | [`25vqbt95WqLDEZG1…`](https://explorer.solana.com/tx/25vqbt95WqLDEZG1qhfpREGcxbUrVyDBCPySSFJFynL2u7TWWJnS3X2dnBwzdVfyv9sTP6aF4HZvKHuHkp7D6aXG?cluster=devnet) | 120 |
+| prefund ledger PDA with zero-data rent minimum | [`3d9Zw8okJMoDYFHe…`](https://explorer.solana.com/tx/3d9Zw8okJMoDYFHeushnqs52EVCC1DJvQaZ5VjiqtqDPpcxaKf8SSnDzfbnZPM6djr7eSNQTdBQHmEmUj59SRkCs?cluster=devnet) | 150 |
+| initialize prefunded ledger with real upgrade authority | [`5n8Th1iMfFREe5hZ…`](https://explorer.solana.com/tx/5n8Th1iMfFREe5hZ13Rm4hAF3yVSCAPBpAqeW6Dyad9xLySRTVpxuR3QSZy8Mkrez3UQ81Sq6hD7YsrXnYrvwkQZ?cluster=devnet) | 7831 |
+| admin pauses | [`3rnAhtBvVzA1STBR…`](https://explorer.solana.com/tx/3rnAhtBvVzA1STBRXHjrSRCPgSQNaJ4Y1q1XTWHrjeZ1Hx3tYGLAJ3Ns9ZFVg9bSvT1a3wwHr4aASRapnE4QDrYt?cluster=devnet) | 14761 |
+| admin unpauses | [`2LbD23Vj1UPHLwNX…`](https://explorer.solana.com/tx/2LbD23Vj1UPHLwNXgS5nL9HLbAfz6GcHXu6UUcvptMrYq1HnrkCqPEtSUUWApdKXqjfpqU9AanHjm7CaQ9AuNit7?cluster=devnet) | 14761 |
+| deposit real SPL backing | [`42YgdZuwxBLBRrqQ…`](https://explorer.solana.com/tx/42YgdZuwxBLBRrqQfsNb5HqVt78QFQBEzm7zL7SXDdUPUf7hQkvqtZ6AnjP5Rc74zpzrisSefuV7WH5s1NsMndvp?cluster=devnet) | 35536 |
+| admin pauses again | [`acBzd1emZgasAC4c…`](https://explorer.solana.com/tx/acBzd1emZgasAC4cLr7Zj2Zhs36poPMjCzMomPPaEbGnYv1zBTqR3cHdTMC85Rg86sgCyxVUopGjWtKuVU7TTgt?cluster=devnet) | 14761 |
+| approve bounded refund delegate | [`2zS4z4jbHb2nUvAR…`](https://explorer.solana.com/tx/2zS4z4jbHb2nUvARpSsE6GSh9amJCJLpTejiWSYXMy1o1YWZr3LSHoFw1rrHEQTcsVn7Sx7QAwA8ruGTnwTSMRfc?cluster=devnet) | 123 |
+| admin unpauses | [`4LXqsnUncU7rnCLH…`](https://explorer.solana.com/tx/4LXqsnUncU7rnCLHGMKd8q5ZGcLiBUtzmzRMBjTTihxBu2S43bYRAgi6diiSg6i6rP3EkYZosSU1a3Tt2jpuNNYh?cluster=devnet) | 14761 |
+| approve bounded refund delegate | [`21B4fT8y1C3bD1Cj…`](https://explorer.solana.com/tx/21B4fT8y1C3bD1Cjvid174SHy8NEGYSoCWR9Td3tDqpsJWZQNDABCKmMTH98LeYyZH1e9AQLXeVVqWs6UMxe8exM?cluster=devnet) | 123 |
+| owner + issuer authorize one incarnation | [`2cKumi8iN2jCEs8e…`](https://explorer.solana.com/tx/2cKumi8iN2jCEs8eNDLXZNF28Hhk4uB3Bth8XGbrNZ5bnw7gw1SokDaRKyEmmFCbvvx9V759LdTAfU5oh7d3gjq1?cluster=devnet) | 56240 |
+| admin suspends ledger | [`3PEJ3cDWxWjTN5Ep…`](https://explorer.solana.com/tx/3PEJ3cDWxWjTN5EpazVAFXBLJWuLiU4ZDAZrF5yVJAxsbPzDR4Ww6iEnK2G7xaNBzzuV3xMmxF4wZuo9n5SuVehC?cluster=devnet) | 19469 |
+| admin lifts ledger suspension | [`3iHZzrfzuuqcLhcb…`](https://explorer.solana.com/tx/3iHZzrfzuuqcLhcb48twQVgvN5rUCAmD2WAgQXioDGDrMZyCuHdH9nSNUW6daKDNhfWWRScoBvLsha8tiVkfFFzz?cluster=devnet) | 19469 |
+| admin proposes new admin | [`5tXCou2HFAW2SWMY…`](https://explorer.solana.com/tx/5tXCou2HFAW2SWMYVgXJAbnNMfzYggGAHGMgAYD1hqfBd68MzhvaFJvkUaskzGV7vP7XRxJqHampaBe4En9GPiEu?cluster=devnet) | 14803 |
+| pending admin accepts | [`61VBJZnErRt39UVt…`](https://explorer.solana.com/tx/61VBJZnErRt39UVteWKrfHXXpUHdRjdq1eeBYF1NBUgFjrmJMMVDqtjfZsVwzAXWD8Fdej6pc5JeooriaLxc3Pfv?cluster=devnet) | 14806 |
+| new admin proposes handback | [`3NuB1VWc7W7yy858…`](https://explorer.solana.com/tx/3NuB1VWc7W7yy858iT6bjNmJvGdfSudT8th2tV5pJaUEZNz8b5PzTP2PercUnZehReeAfea7n6yfAoXEKLhnHNXr?cluster=devnet) | 14803 |
+| original admin accepts handback | [`3RW6V2aYUeP9BTau…`](https://explorer.solana.com/tx/3RW6V2aYUeP9BTauCjU52cCLHV7SqadX9ed8q5ZWKGueatfJ1CdHT3FBzGD4VmNTg3U8pyTrAwCsnbsaydGy63YG?cluster=devnet) | 14806 |
+| open consumes 1000 backed credits | [`64rPxNoPxsSxz3Yc…`](https://explorer.solana.com/tx/64rPxNoPxsSxz3YcyWYeJ8d71Qr4gBPAYxAVua5AzffHPPudyxFRYR51Yy9hPis3Eo4bDosnc3baTDiE8WWz2CJJ?cluster=devnet) | 165335 |
+| topup consumes another 200 credits | [`62XfXdsLMkJSv71q…`](https://explorer.solana.com/tx/62XfXdsLMkJSv71qcZZ4FXq4BzXoP61wQod6HKSoHuK29F6SrFmWjpuQceSGmrnNpUwQ5vbm37dfhA9m8szW73nn?cluster=devnet) | 134720 |
+| signed voucher + cooperative seal | [`XHL9zaCF3wE1QE1e…`](https://explorer.solana.com/tx/XHL9zaCF3wE1QE1eQzLVmMBgDc5RfBwge1S968ZPHKVDMpLWE9YRXaghGgjb1wysoE66tWX6QgBbHCx3apA3Kv2?cluster=devnet) | 513 |
+| revoke refund delegate | [`3iosCvH5oRMLfhYZ…`](https://explorer.solana.com/tx/3iosCvH5oRMLfhYZrho19w6FLrMnJpRoZB8J1FjcQoGpF77nk8HnwJveHVpNr1jDKMtvomvMe4j7ZyhFfnDgrzU9?cluster=devnet) | 102 |
+| approve bounded refund delegate | [`2fwYwYLjYqeiaLcd…`](https://explorer.solana.com/tx/2fwYwYLjYqeiaLcdCSyVjDXe9EqfryyZ5En23U74zxCNV6zykfTco2j58888boxjKpCp6qEojNXDDjCccFNDm9r8?cluster=devnet) | 123 |
+| refund 500 tokens back into custody and credits | [`5h6yzjufWK931bKA…`](https://explorer.solana.com/tx/5h6yzjufWK931bKAx4tDHdagRBnSiHzhuQmSMJDb7xF9smAEymr5REX9c7nR8pFpv9GyujaHVqXSeukYPwPgdAsg?cluster=devnet) | 161756 |
+| approve bounded refund delegate | [`4Mv8vrUwmSqYpFrL…`](https://explorer.solana.com/tx/4Mv8vrUwmSqYpFrLQSEhvcrRFV4h2GFa2YxmdojeC9due1DoYHbyAaTEw4ukx3gwZ1w28aPX8meYGJZSeCbvWn78?cluster=devnet) | 123 |
+| approve bounded refund delegate | [`GguTQUiq76j781B5…`](https://explorer.solana.com/tx/GguTQUiq76j781B5zjdRY4UBVjYXbPtJUvpCyk7jnJ3cp6GU5fi7YoQDpRumpXsiugu8dMaQwtrx83Q5nYTNzoD?cluster=devnet) | 123 |
+| owner + issuer authorize one incarnation | [`4nZX9upVBkZDWD7W…`](https://explorer.solana.com/tx/4nZX9upVBkZDWD7Wt7q1RnNVqz5hLaqZbGX6pGud9bjDxTTWXapRz2FYAew22dK77Q2ay8HmGarfPA8r9deYYhsm?cluster=devnet) | 54740 |
+| open second credit-backed channel | [`3pMuQcs4X299FbLX…`](https://explorer.solana.com/tx/3pMuQcs4X299FbLX6T2XXUXtXEambARZNsRjRZ1Q1dB2YGNHukFkhZaM56MQ3TxvrxDDxnUioasnWTxJUmToLddx?cluster=devnet) | 138335 |
+| signed voucher + cooperative seal | [`Ggs2jguTGs39Voh9…`](https://explorer.solana.com/tx/Ggs2jguTGs39Voh9NuyGSvdgrbDzKGavmf6hQzZNsAY13BYs7zsYojvkKMrJshnGvM8woTF99vKaEL5snZyrBvw?cluster=devnet) | 513 |
+| withdraw refund before terminal distribution | [`24GhJK2iMftMKptQ…`](https://explorer.solana.com/tx/24GhJK2iMftMKptQersrRJr8yT2E9aAQcHFk28jBGzzpmPW5qhByRHXLRuRg3twbcjj9vSHik7Li4gTCLDSFwmVK?cluster=devnet) | 116744 |
+| revoke refund delegate | [`5HJvkcyMnVFfUECf…`](https://explorer.solana.com/tx/5HJvkcyMnVFfUECfSKads5Nfw7y1JEZqKJufaPYEcVipDJrs5QgRRWQZ6U9CQREuQwWyW8Fgebi3UmUxAoTRfSpn?cluster=devnet) | 102 |
+| zero-refund terminal succeeds without delegate | [`5pqbQ7sHoYCizKtd…`](https://explorer.solana.com/tx/5pqbQ7sHoYCizKtd2jcHt8KQ5kkfcmGM4K3JUXNnu72TQFRwVeVUifaz1Y6QXAkWfpZpmUsYXu2itwDY2N4i5ptB?cluster=devnet) | 105312 |
+| approve bounded refund delegate | [`4fr6ZwS3xSRKucsz…`](https://explorer.solana.com/tx/4fr6ZwS3xSRKucszFYut53QZ5jNav9y27n3xi8dNN9Q6LWK5AazBntyKQPdF1jGe7wawUE84YnF7im1RFwAGRnbo?cluster=devnet) | 123 |
+| owner + issuer authorize one incarnation | [`3sFJcMgrZpSyywVN…`](https://explorer.solana.com/tx/3sFJcMgrZpSyywVN4xcogeyDtuYP6CF4pyhpXJCE5NKVSYkCVdvFvWP8h5paebYUnYcFTXLwULRMZ7AnYJtKXrtg?cluster=devnet) | 53240 |
+| cancel expired never-funded authorization | [`3uorpX2aFkfu5Hxo…`](https://explorer.solana.com/tx/3uorpX2aFkfu5HxoE4MGwqUoaADxn4tewkmo93REHR8w3HEBh4Hh14LVtPvJksvsq55tGLFcV8eAXabLPNhLXimq?cluster=devnet) | 5751 |
+| approve bounded refund delegate | [`5B9mmdVNcATbMpgo…`](https://explorer.solana.com/tx/5B9mmdVNcATbMpgonQXcrUU91c7UU1pYo4QKknTu9fUjEU1wMZfL6uByi6JWn29SoCEeZCcJF4ectxpyAnyCJQS8?cluster=devnet) | 123 |
+| owner + issuer authorize one incarnation | [`5ySFLFrHxzsxykzq…`](https://explorer.solana.com/tx/5ySFLFrHxzsxykzqCNrBhoGZ3FBauSmP64Ls6oe1d5S2Gcenk5zQVZDJvSy6c4LV3FSzMeZqFnuJQHADCbaGxime?cluster=devnet) | 56240 |
+| fresh nonce after cancellation can fund | [`5FkY64KkKFi7AcRt…`](https://explorer.solana.com/tx/5FkY64KkKFi7AcRtBHngQocNfnBp5mFDRwBZv7zBvVBtzT3gGU8RgBrjpHEFgBWfY1jdyMMiTYmNKQ69Jser7qzx?cluster=devnet) | 162335 |
+
+## Not covered / caveats
+- pay-kit / pay don't emit `*WithHooks` instructions yet. The harness builds channel instructions directly, so no pay-kit client or merchant was involved.
+- `CHNLxBt…` is not byte-verified against `23193ab` (dump `3e94032d…` vs local `538e8b3f…`), but the hook ABI behaved as `23193ab` across every case.
+- The admin is a single key, not Squads. No containerized `solana-verify` hash yet (no Docker).
+- Leftover SOL in ephemeral test owner keys is not recovered (about 0.1 SOL per run).

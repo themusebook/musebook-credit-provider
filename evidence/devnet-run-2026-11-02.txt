@@ -1,0 +1,62 @@
+PASS initialize governance config (upgrade-authority gated): 3hFADYYwjshECgytsxTv77gNzq6RySSqaYNRs87ArEonVt3k3YnZvFwqo3ZnrqvmLzbgJoaRaRd2ufu8pQkvZRAi, 304 bytes, 18207 CU
+PASS fund from devnet deployer: J7cKhXWHVAgwr7VMcH8VYJokDLKKWYU3qTA4w3qSfroYTxXMgCrLEUVT1DcAmagJumyqx74mpjfNpDLFrNgCQre, 215 bytes, 150 CU
+PASS create SPL mint: 5fEYFdppej41Qsh9WGPwadn7BCmb7dAHDfXBK7f3ihpBurkHSnH9LbK6dRa2ja3VehmYEUNLTAa34UBztPgCwkGM, 390 bytes, 352 CU
+PASS create associated token account: 3sF8domKwVoTxvavo5x5CkpsDCNXvQA7ArPCRbHUdopApJjFzhBNRK48GBpFPGsmbxF2qw9q4ZPSyBY12FYmbqSo, 304 bytes, 22417 CU
+PASS create associated token account: 5Frvy18c9Ed2G2ioui4hTQG9v2eHgjdPEzUMFfBQdjJGpvCGoG1Jztjnpqz4woGjAfNp1hygvXZqSY1HyjBECXaH, 336 bytes, 15018 CU
+PASS create associated token account: 7u3hnaqnHUy5j3eZV69DCtEcL3P6AecbEtDvyxArkrpsT6JSujcTac6ZeSNA3DUribG8ynyeZGo8WMvwevLUbih, 336 bytes, 15018 CU
+PASS create associated token account: 5uwP6eCGAw53D8PyzfK5fRYuUgFswFk88Sqry9ffc8J383Nqqh1GZroMAfnqcaB7Py7vRpHP8uFt5kyNoz332JNS, 336 bytes, 15018 CU
+PASS mint backing tokens: 25vqbt95WqLDEZG1qhfpREGcxbUrVyDBCPySSFJFynL2u7TWWJnS3X2dnBwzdVfyv9sTP6aF4HZvKHuHkp7D6aXG, 245 bytes, 120 CU
+PASS prefund ledger PDA with zero-data rent minimum: 3d9Zw8okJMoDYFHeushnqs52EVCC1DJvQaZ5VjiqtqDPpcxaKf8SSnDzfbnZPM6djr7eSNQTdBQHmEmUj59SRkCs, 215 bytes, 150 CU
+PASS missing issuer signature: intended error, financial accounts unchanged
+PASS substituted ProgramData: intended error, financial accounts unchanged
+PASS initialize prefunded ledger with real upgrade authority: 5n8Th1iMfFREe5hZ13Rm4hAF3yVSCAPBpAqeW6Dyad9xLySRTVpxuR3QSZy8Mkrez3UQ81Sq6hD7YsrXnYrvwkQZ, 401 bytes, 7831 CU
+PASS non-admin owner cannot pause: rejected, all custody/channel accounts unchanged
+PASS admin pauses: 3rnAhtBvVzA1STBRXHjrSRCPgSQNaJ4Y1q1XTWHrjeZ1Hx3tYGLAJ3Ns9ZFVg9bSvT1a3wwHr4aASRapnE4QDrYt, 205 bytes, 14761 CU
+PASS paused: deposit blocked: rejected, all custody/channel accounts unchanged
+PASS admin unpauses: 2LbD23Vj1UPHLwNXgS5nL9HLbAfz6GcHXu6UUcvptMrYq1HnrkCqPEtSUUWApdKXqjfpqU9AanHjm7CaQ9AuNit7, 205 bytes, 14761 CU
+PASS deposit real SPL backing: 42YgdZuwxBLBRrqQfsNb5HqVt78QFQBEzm7zL7SXDdUPUf7hQkvqtZ6AnjP5Rc74zpzrisSefuV7WH5s1NsMndvp, 344 bytes, 35536 CU
+PASS admin pauses again: acBzd1emZgasAC4cLr7Zj2Zhs36poPMjCzMomPPaEbGnYv1zBTqR3cHdTMC85Rg86sgCyxVUopGjWtKuVU7TTgt, 205 bytes, 14761 CU
+PASS approve bounded refund delegate: 2zS4z4jbHb2nUvARpSsE6GSh9amJCJLpTejiWSYXMy1o1YWZr3LSHoFw1rrHEQTcsVn7Sx7QAwA8ruGTnwTSMRfc, 245 bytes, 123 CU
+PASS paused: new hook approval (authorize) blocked: rejected, all custody/channel accounts unchanged
+PASS admin unpauses: 4LXqsnUncU7rnCLHGMKd8q5ZGcLiBUtzmzRMBjTTihxBu2S43bYRAgi6diiSg6i6rP3EkYZosSU1a3Tt2jpuNNYh, 205 bytes, 14761 CU
+PASS approve bounded refund delegate: 21B4fT8y1C3bD1Cjvid174SHy8NEGYSoCWR9Td3tDqpsJWZQNDABCKmMTH98LeYyZH1e9AQLXeVVqWs6UMxe8exM, 245 bytes, 123 CU
+PASS owner + issuer authorize one incarnation: 2cKumi8iN2jCEs8eNDLXZNF28Hhk4uB3Bth8XGbrNZ5bnw7gw1SokDaRKyEmmFCbvvx9V759LdTAfU5oh7d3gjq1, 570 bytes, 56240 CU
+PASS admin suspends ledger: 3PEJ3cDWxWjTN5EpazVAFXBLJWuLiU4ZDAZrF5yVJAxsbPzDR4Ww6iEnK2G7xaNBzzuV3xMmxF4wZuo9n5SuVehC, 238 bytes, 19469 CU
+PASS suspended ledger: pre_fund hook rejects open: rejected, all custody/channel accounts unchanged
+PASS admin lifts ledger suspension: 3iHZzrfzuuqcLhcb48twQVgvN5rUCAmD2WAgQXioDGDrMZyCuHdH9nSNUW6daKDNhfWWRScoBvLsha8tiVkfFFzz, 238 bytes, 19469 CU
+PASS admin proposes new admin: 5tXCou2HFAW2SWMYVgXJAbnNMfzYggGAHGMgAYD1hqfBd68MzhvaFJvkUaskzGV7vP7XRxJqHampaBe4En9GPiEu, 236 bytes, 14803 CU
+PASS non-pending key cannot accept admin: rejected, all custody/channel accounts unchanged
+PASS pending admin accepts: 61VBJZnErRt39UVteWKrfHXXpUHdRjdq1eeBYF1NBUgFjrmJMMVDqtjfZsVwzAXWD8Fdej6pc5JeooriaLxc3Pfv, 300 bytes, 14806 CU
+PASS old admin can no longer pause: rejected, all custody/channel accounts unchanged
+PASS new admin proposes handback: 3NuB1VWc7W7yy858iT6bjNmJvGdfSudT8th2tV5pJaUEZNz8b5PzTP2PercUnZehReeAfea7n6yfAoXEKLhnHNXr, 332 bytes, 14803 CU
+PASS original admin accepts handback: 3RW6V2aYUeP9BTauCjU52cCLHV7SqadX9ed8q5ZWKGueatfJ1CdHT3FBzGD4VmNTg3U8pyTrAwCsnbsaydGy63YG, 204 bytes, 14806 CU
+PASS reject overlapping authorization: rejected, all custody/channel accounts unchanged
+PASS reject changed refund policy before any funding: rejected, all custody/channel accounts unchanged
+PASS open consumes 1000 backed credits: 64rPxNoPxsSxz3YcyWYeJ8d71Qr4gBPAYxAVua5AzffHPPudyxFRYR51Yy9hPis3Eo4bDosnc3baTDiE8WWz2CJJ, 1057 bytes, 165335 CU
+PASS funded authorization cannot cancel: rejected, all custody/channel accounts unchanged
+PASS cap overrun rolls back: rejected, all custody/channel accounts unchanged
+PASS topup consumes another 200 credits: 62XfXdsLMkJSv71qcZZ4FXq4BzXoP61wQod6HKSoHuK29F6SrFmWjpuQceSGmrnNpUwQ5vbm37dfhA9m8szW73nn, 478 bytes, 134720 CU
+PASS signed voucher + cooperative seal: XHL9zaCF3wE1QE1eQzLVmMBgDc5RfBwge1S968ZPHKVDMpLWE9YRXaghGgjb1wysoE66tWX6QgBbHCx3apA3Kv2, 532 bytes, 513 CU
+PASS revoke refund delegate: 3iosCvH5oRMLfhYZrho19w6FLrMnJpRoZB8J1FjcQoGpF77nk8HnwJveHVpNr1jDKMtvomvMe4j7ZyhFfnDgrzU9, 204 bytes, 102 CU
+PASS failed refund hook rolls back merchant and payer transfers: rejected, all custody/channel accounts unchanged
+PASS approve bounded refund delegate: 2fwYwYLjYqeiaLcdCSyVjDXe9EqfryyZ5En23U74zxCNV6zykfTco2j58888boxjKpCp6qEojNXDDjCccFNDm9r8, 245 bytes, 123 CU
+PASS refund 500 tokens back into custody and credits: 5h6yzjufWK931bKAx4tDHdagRBnSiHzhuQmSMJDb7xF9smAEymr5REX9c7nR8pFpv9GyujaHVqXSeukYPwPgdAsg, 610 bytes, 161756 CU
+PASS approve bounded refund delegate: 4Mv8vrUwmSqYpFrLQSEhvcrRFV4h2GFa2YxmdojeC9due1DoYHbyAaTEw4ukx3gwZ1w28aPX8meYGJZSeCbvWn78, 245 bytes, 123 CU
+PASS consumed nonce cannot authorize again: rejected, all custody/channel accounts unchanged
+PASS approve bounded refund delegate: GguTQUiq76j781B5zjdRY4UBVjYXbPtJUvpCyk7jnJ3cp6GU5fi7YoQDpRumpXsiugu8dMaQwtrx83Q5nYTNzoD, 245 bytes, 123 CU
+PASS owner + issuer authorize one incarnation: 4nZX9upVBkZDWD7Wt7q1RnNVqz5hLaqZbGX6pGud9bjDxTTWXapRz2FYAew22dK77Q2ay8HmGarfPA8r9deYYhsm, 570 bytes, 54740 CU
+PASS open second credit-backed channel: 3pMuQcs4X299FbLX6T2XXUXtXEambARZNsRjRZ1Q1dB2YGNHukFkhZaM56MQ3TxvrxDDxnUioasnWTxJUmToLddx, 1057 bytes, 138335 CU
+PASS signed voucher + cooperative seal: Ggs2jguTGs39Voh9NuyGSvdgrbDzKGavmf6hQzZNsAY13BYs7zsYojvkKMrJshnGvM8woTF99vKaEL5snZyrBvw, 532 bytes, 513 CU
+PASS withdraw refund before terminal distribution: 24GhJK2iMftMKptQersrRJr8yT2E9aAQcHFk28jBGzzpmPW5qhByRHXLRuRg3twbcjj9vSHik7Li4gTCLDSFwmVK, 470 bytes, 116744 CU
+PASS revoke refund delegate: 5HJvkcyMnVFfUECfSKads5Nfw7y1JEZqKJufaPYEcVipDJrs5QgRRWQZ6U9CQREuQwWyW8Fgebi3UmUxAoTRfSpn, 204 bytes, 102 CU
+PASS zero-refund terminal succeeds without delegate: 5pqbQ7sHoYCizKtd2jcHt8KQ5kkfcmGM4K3JUXNnu72TQFRwVeVUifaz1Y6QXAkWfpZpmUsYXu2itwDY2N4i5ptB, 610 bytes, 105312 CU
+PASS approve bounded refund delegate: 4fr6ZwS3xSRKucszFYut53QZ5jNav9y27n3xi8dNN9Q6LWK5AazBntyKQPdF1jGe7wawUE84YnF7im1RFwAGRnbo, 245 bytes, 123 CU
+PASS owner + issuer authorize one incarnation: 3sFJcMgrZpSyywVN4xcogeyDtuYP6CF4pyhpXJCE5NKVSYkCVdvFvWP8h5paebYUnYcFTXLwULRMZ7AnYJtKXrtg, 570 bytes, 53240 CU
+PASS expired authorization cannot fund: rejected, all custody/channel accounts unchanged
+PASS cancel expired never-funded authorization: 3uorpX2aFkfu5HxoE4MGwqUoaADxn4tewkmo93REHR8w3HEBh4Hh14LVtPvJksvsq55tGLFcV8eAXabLPNhLXimq, 301 bytes, 5751 CU
+PASS canceled authorization cannot fund: rejected, all custody/channel accounts unchanged
+PASS canceled nonce cannot replay: rejected, all custody/channel accounts unchanged
+PASS approve bounded refund delegate: 5B9mmdVNcATbMpgonQXcrUU91c7UU1pYo4QKknTu9fUjEU1wMZfL6uByi6JWn29SoCEeZCcJF4ectxpyAnyCJQS8, 245 bytes, 123 CU
+PASS owner + issuer authorize one incarnation: 5ySFLFrHxzsxykzqCNrBhoGZ3FBauSmP64Ls6oe1d5S2Gcenk5zQVZDJvSy6c4LV3FSzMeZqFnuJQHADCbaGxime, 570 bytes, 56240 CU
+PASS fresh nonce after cancellation can fund: 5FkY64KkKFi7AcRtBHngQocNfnBp5mFDRwBZv7zBvVBtzT3gGU8RgBrjpHEFgBWfY1jdyMMiTYmNKQ69Jser7qzx, 1057 bytes, 162335 CU
+PASS devnet backed-credit end-to-end scenarios
