@@ -38,6 +38,16 @@ governance surface above. Hooks use the payment-channel-interface SDK
 (`HookContext::decode_callback`, plus `validate_callback`, which checks the
 channel account through `ChannelAccountView`).
 
+## Submissions
+
+This implementation is under review in the Solana Foundation's Pay repos:
+
+- Provider-name registration (name recognized, `Unavailable` until a reviewed
+  integration lands): [pay-kit #411](https://github.com/solana-foundation/pay-kit/pull/411)
+- Working devnet integration, stacked on #411: [pay-kit #414](https://github.com/solana-foundation/pay-kit/pull/414)
+- Merchant/provider listing: [pay-skills #337](https://github.com/solana-foundation/pay-skills/pull/337)
+- Clawd Domains, a separate live x402 service from the same team: [pay-skills #336](https://github.com/solana-foundation/pay-skills/pull/336)
+
 ## Run
 
 ```sh
