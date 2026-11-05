@@ -11,7 +11,7 @@
 - Threat model (docs/THREAT_MODEL.md) and governance doc.
 
 ## Not ready
-- **No containerized `solana-verify` hash** (no Docker on the build box).
+- **solana-verify Docker hash is enforced in CI** against the deployed devnet program (`7055e31b…`); a code change fails CI until a matching Squads upgrade ships. Mainnet still has no program and no verify target.
 - **Global pause cannot gate `pre_fund`** without a hook-ABI change. Relies on per-ledger suspension. Needs a maintainer decision.
 - **Issuer rotation does not re-key existing ledgers.** Each ledger keeps its init-time issuer. Revoking it relies on suspension.
 - **CU variance:** PDA bump searches repeat on every callback, so a hooked `open` can exceed the 200k default (seen once on Surfpool). Clients must set a CU limit. Fix: store bumps in the ledger.
@@ -21,4 +21,4 @@
 - **Surfpool e2e not in CI** (CI runs host + SBF build + LiteSVM).
 - **No SECURITY.md contact, published upgrade policy or timelock.**
 - **No independent audit.** The upstream example's audit status does not carry over.
-- **No pay-kit adapter, conformance vectors or merchant demo** (pay-kit #411 is still a draft).
+- **pay-kit adapter is under review, not merged**: #414 (devnet-only adapter, ready for review), #413 (`*WithHooks` tags, approved), #411 (name reservation, still draft). No conformance vectors or merchant demo yet. Mainnet unavailable.
