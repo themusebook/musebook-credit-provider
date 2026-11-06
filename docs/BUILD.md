@@ -16,14 +16,19 @@ Hashes below are for v2 (set_issuer). v1 was default `f8570c12…`, devnet `26c0
 | devnet (`devnet-deployment`) | `4af58a20ee217e920cd050f311f8f99b86ffedd075a07f482f7aad8f41f7c62e` |
 
 ## solana-verify
-`solana-verify build` needs Docker, and the build box had none, so the containerized hash is **not produced yet**. Run it on a machine with Docker:
+CI (`.github/workflows/verify-build.yml`) runs `solana-verify` in Docker on every
+push/PR and **fails if the Docker executable hash differs from the deployed
+devnet program** `97F68uhs…`. The Squads-upgraded on-chain executable hash is
+`7055e31b22e4055f6ea0e488e9b086de523f0d3dbaa776f59d2df3ca85f14e7b` (see
+`evidence/devnet-upgrade-solana-verify-2026-11-02.txt`).
+
+Native `scripts/build-verifiable.sh` hashes in the table above are a separate,
+non-Docker toolchain path and are **not** expected to equal the Docker /
+on-chain hash.
+
+Local Docker rebuild (needs Docker):
 
 ```sh
-cargo install solana-verify
-solana-verify build --library-name musebook_credit_provider \
-  --base-image solanafoundation/solana-verifiable-build:3.1.10 programs/musebook-credit-provider
-solana-verify verify-from-repo -u https://api.devnet.solana.com --program-id <PROGRAM_ID> \
-  https://github.com/themusebook/musebook-credit-provider --commit-hash <SHA> \
-  --library-name musebook_credit_provider --mount-path programs/musebook-credit-provider -- --features devnet-deployment
+cargo install solana-verify --version 0.5.2 --locked
+# Prefer the workflow's pinned base image + args; see verify-build.yml.
 ```
-One caveat: the program crate depends on `../../vendor/...` by path, so the mount path may have to be the repo root. Check this when you first run it.
